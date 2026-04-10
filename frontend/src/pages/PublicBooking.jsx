@@ -142,7 +142,11 @@ export default function PublicBooking() {
         <div className="max-w-lg mx-auto px-4 py-6 text-center">
           {business.logoUrl && (
             <img
-              src={business.logoUrl}
+              src={
+                business.logoUrl.startsWith('http')
+                  ? business.logoUrl
+                  : `${import.meta.env.VITE_API_URL ?? ''}${business.logoUrl}`
+              }
               alt={business.name}
               className="w-16 h-16 rounded-xl object-cover mx-auto mb-3 border-2 border-white/30"
             />

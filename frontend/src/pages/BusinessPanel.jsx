@@ -214,6 +214,12 @@ function BusinessInfo({ business }) {
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState({ type: '', text: '' })
 
+  const getLogoUrl = (url) => {
+    if (!url) return null
+    if (url.startsWith('http')) return url
+    return `${import.meta.env.VITE_API_URL ?? ''}${url}`
+  }
+
   const copyLink = async () => {
     await navigator.clipboard.writeText(publicUrl)
     setCopied(true)
@@ -285,7 +291,7 @@ function BusinessInfo({ business }) {
             <label className="block text-sm font-medium text-gray-700 mb-2">Logo</label>
             <div className="flex items-center gap-4">
               {logoPreview ? (
-                <img src={logoPreview} alt="Logo" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
+                <img src={getLogoUrl(logoPreview)} alt="Logo" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
               ) : (
                 <div className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs">
                   Logo
