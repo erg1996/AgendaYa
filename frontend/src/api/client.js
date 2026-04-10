@@ -3,11 +3,24 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
 function getToken() {
   try {
-    const auth = localStorage.getItem('auth')
+    const auth = sessionStorage.getItem('auth')
     return auth ? JSON.parse(auth).token : null
   } catch {
     return null
   }
+}
+
+function getCsrfToken() {
+  // Get CSRF token from cookie
+  const name = 'XSRF-TOKEN'
+  const value = `; ${document.cookie}`
+  const parts = value.split(`; ${name}=`)
+  if (parts.length === 2) {
+    const token = parts.pop().split(';').shift()
+    // Decode URL-encoded token (cookies encode special chars like = as %3D)
+    return decodeURIComponent(token)
+  }
+  return null
 }
 
 async function request(path, options = {}, authenticated = false) {
@@ -18,12 +31,18 @@ async function request(path, options = {}, authenticated = false) {
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
 
+  // Add CSRF token for state-changing requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method?.toUpperCase())) {
+    const csrfToken = getCsrfToken()
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
 
   // Handle expired/invalid token — redirect to login
   if (res.status === 401 && authenticated) {
-    localStorage.removeItem('auth')
-    localStorage.removeItem('activeBusiness')
+    sessionStorage.removeItem('auth')
+    sessionStorage.removeItem('activeBusiness')
     window.location.href = '/login'
     throw new Error('Session expired')
   }
@@ -127,12 +146,17 @@ export const getDashboardAnalytics = (businessId) =>
 // ─── Reports ─────────────────────────────────────────────────────────────────
 export const downloadReportCsv = async (businessId, from, to) => {
   const token = getToken()
+  const csrfToken = getCsrfToken()
   const params = new URLSearchParams({ businessId })
   if (from) params.append('from', from)
   if (to) params.append('to', to)
 
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  if (csrfToken) headers['X-CSRF-Token'] = csrfToken
+
   const res = await fetch(`${BASE_URL}/api/reports/appointments.csv?${params}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers,
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
@@ -150,12 +174,17 @@ export const downloadReportCsv = async (businessId, from, to) => {
 // ─── Upload ───────────────────────────────────────────────────────────────────
 export const uploadLogo = async (file) => {
   const token = getToken()
+  const csrfToken = getCsrfToken()
   const formData = new FormData()
   formData.append('file', file)
 
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  if (csrfToken) headers['X-CSRF-Token'] = csrfToken
+
   const res = await fetch(`${BASE_URL}/api/upload/logo`, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers,
     body: formData,
   })
   if (!res.ok) {

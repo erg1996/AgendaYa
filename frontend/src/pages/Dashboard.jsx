@@ -86,61 +86,61 @@ export default function Dashboard() {
     .slice(0, 5)
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-800">{business.name}</h1>
-        <p className="text-gray-500">Panel de control</p>
+    <div className="px-4 sm:px-6 py-4 sm:py-8">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-3xl font-bold text-gray-800">{business.name}</h1>
+        <p className="text-sm sm:text-base text-gray-500">Panel de control</p>
       </div>
 
       {/* Row 1 — Temporal */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4">
         {timeStats.map(({ label, value, Icon, color }) => (
-          <div key={label} className={`${color} rounded-xl p-5 text-center`}>
-            <Icon className="w-7 h-7 mx-auto mb-1" />
-            <div className="text-3xl font-bold">{value}</div>
-            <div className="text-sm mt-1 opacity-75">{label}</div>
+          <div key={label} className={`${color} rounded-xl p-3 sm:p-5 text-center`}>
+            <Icon className="w-5 sm:w-7 h-5 sm:h-7 mx-auto mb-1" />
+            <div className="text-xl sm:text-3xl font-bold">{value}</div>
+            <div className="text-xs sm:text-sm mt-1 opacity-75">{label}</div>
           </div>
         ))}
       </div>
 
       {/* Row 2 — Status & revenue */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-6 sm:mb-8">
         {statusStats.map(({ label, sub, value, Icon, color }) => (
-          <div key={label} className={`${color} rounded-xl p-5 text-center`}>
-            <Icon className="w-7 h-7 mx-auto mb-1" />
-            <div className="text-3xl font-bold">{value}</div>
-            <div className="text-sm mt-1 opacity-75">{label}</div>
-            <div className="text-xs mt-0.5 opacity-50">{sub}</div>
+          <div key={label} className={`${color} rounded-xl p-3 sm:p-5 text-center`}>
+            <Icon className="w-5 sm:w-7 h-5 sm:h-7 mx-auto mb-1" />
+            <div className="text-xl sm:text-3xl font-bold">{value}</div>
+            <div className="text-xs sm:text-sm mt-1 opacity-75">{label}</div>
+            <div className="text-xs mt-0.5 opacity-50 hidden sm:block">{sub}</div>
           </div>
         ))}
       </div>
 
       {/* Insights */}
       {analytics && (analytics.topService || analytics.busiestHour || analytics.quietestHour) && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
           {analytics.topService && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <div className="text-sm text-gray-500 mb-1">Servicio mas agendado</div>
-              <div className="text-xl font-bold text-gray-800">{analytics.topService.name}</div>
-              <div className="text-sm text-indigo-600 font-medium mt-1">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
+              <div className="text-xs sm:text-sm text-gray-500 mb-1">Servicio mas agendado</div>
+              <div className="text-lg sm:text-xl font-bold text-gray-800 truncate">{analytics.topService.name}</div>
+              <div className="text-xs sm:text-sm text-indigo-600 font-medium mt-1">
                 {analytics.topService.count} cita{analytics.topService.count !== 1 ? 's' : ''}
               </div>
             </div>
           )}
           {analytics.busiestHour && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <div className="text-sm text-gray-500 mb-1">Hora mas agendada</div>
-              <div className="text-xl font-bold text-gray-800">{formatHour(analytics.busiestHour.hour)}</div>
-              <div className="text-sm text-green-600 font-medium mt-1">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
+              <div className="text-xs sm:text-sm text-gray-500 mb-1">Hora mas agendada</div>
+              <div className="text-lg sm:text-xl font-bold text-gray-800">{formatHour(analytics.busiestHour.hour)}</div>
+              <div className="text-xs sm:text-sm text-green-600 font-medium mt-1">
                 {analytics.busiestHour.count} cita{analytics.busiestHour.count !== 1 ? 's' : ''}
               </div>
             </div>
           )}
           {analytics.quietestHour && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <div className="text-sm text-gray-500 mb-1">Hora menos agendada</div>
-              <div className="text-xl font-bold text-gray-800">{formatHour(analytics.quietestHour.hour)}</div>
-              <div className="text-sm text-amber-600 font-medium mt-1">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
+              <div className="text-xs sm:text-sm text-gray-500 mb-1">Hora menos agendada</div>
+              <div className="text-lg sm:text-xl font-bold text-gray-800">{formatHour(analytics.quietestHour.hour)}</div>
+              <div className="text-xs sm:text-sm text-amber-600 font-medium mt-1">
                 {analytics.quietestHour.count} cita{analytics.quietestHour.count !== 1 ? 's' : ''}
               </div>
             </div>
@@ -149,8 +149,8 @@ export default function Dashboard() {
       )}
 
       {/* Upcoming */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Proximas Citas</h2>
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Proximas Citas</h2>
         {upcoming.length === 0 ? (
           <p className="text-gray-400 text-center py-6">No hay citas proximas activas</p>
         ) : (

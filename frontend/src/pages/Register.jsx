@@ -20,7 +20,7 @@ export default function Register() {
     try {
       const result = await register(form)
       // saveAuth triggers BusinessContext to load businesses from API
-      localStorage.removeItem('activeBusiness')
+      sessionStorage.removeItem('activeBusiness')
       saveAuth(result)
       navigate('/')
     } catch (err) {

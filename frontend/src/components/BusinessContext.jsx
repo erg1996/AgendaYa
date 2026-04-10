@@ -19,7 +19,7 @@ export function BusinessProvider({ children }) {
     if (!auth) {
       // Logged out — clear everything
       setBusiness(null)
-      localStorage.removeItem('activeBusiness')
+      sessionStorage.removeItem('activeBusiness')
       setServices([])
       setAppointments([])
       return
@@ -27,7 +27,7 @@ export function BusinessProvider({ children }) {
 
     if (prevUserId !== auth.userId) {
       // Different user logged in — clear stale business and validate from API
-      localStorage.removeItem('activeBusiness')
+      sessionStorage.removeItem('activeBusiness')
       setBusiness(null)
       setServices([])
       setAppointments([])
@@ -41,8 +41,8 @@ export function BusinessProvider({ children }) {
         })
         .catch(() => {})
     } else {
-      // Same user, try to restore from localStorage
-      const saved = localStorage.getItem('activeBusiness')
+      // Same user, try to restore from sessionStorage
+      const saved = sessionStorage.getItem('activeBusiness')
       if (saved) {
         try {
           const parsed = JSON.parse(saved)
@@ -55,14 +55,14 @@ export function BusinessProvider({ children }) {
               } else if (businesses.length > 0) {
                 setBusiness(businesses[0])
               } else {
-                localStorage.removeItem('activeBusiness')
+                sessionStorage.removeItem('activeBusiness')
               }
             })
             .catch(() => {
-              localStorage.removeItem('activeBusiness')
+              sessionStorage.removeItem('activeBusiness')
             })
         } catch {
-          localStorage.removeItem('activeBusiness')
+          sessionStorage.removeItem('activeBusiness')
         }
       }
     }
@@ -70,11 +70,11 @@ export function BusinessProvider({ children }) {
 
   useEffect(() => {
     if (business) {
-      localStorage.setItem('activeBusiness', JSON.stringify(business))
+      sessionStorage.setItem('activeBusiness', JSON.stringify(business))
       refreshServices()
       refreshAppointments()
     } else {
-      localStorage.removeItem('activeBusiness')
+      sessionStorage.removeItem('activeBusiness')
       setServices([])
       setAppointments([])
     }

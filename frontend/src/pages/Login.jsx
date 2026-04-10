@@ -19,7 +19,7 @@ export default function Login() {
     try {
       const result = await login({ email, password })
       // saveAuth triggers BusinessContext to load businesses from API
-      localStorage.removeItem('activeBusiness')
+      sessionStorage.removeItem('activeBusiness')
       saveAuth(result)
       navigate('/')
     } catch (err) {

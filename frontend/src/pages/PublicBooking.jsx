@@ -133,13 +133,13 @@ export default function PublicBooking() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <div
         className="border-b border-gray-200"
         style={{ backgroundColor: business.brandColor ?? '#4F46E5' }}
       >
-        <div className="max-w-lg mx-auto px-4 py-6 text-center">
+        <div className="max-w-lg mx-auto px-4 py-4 sm:py-6 text-center">
           {business.logoUrl && (
             <img
               src={
@@ -148,21 +148,21 @@ export default function PublicBooking() {
                   : `${import.meta.env.VITE_API_URL ?? ''}${business.logoUrl}`
               }
               alt={business.name}
-              className="w-16 h-16 rounded-xl object-cover mx-auto mb-3 border-2 border-white/30"
+              className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl object-cover mx-auto mb-2 sm:mb-3 border-2 border-white/30"
             />
           )}
-          <h1 className="text-2xl font-bold text-white">{business.name}</h1>
-          <p className="text-white/80 text-sm mt-1">Reserva tu cita online</p>
+          <h1 className="text-lg sm:text-2xl font-bold text-white">{business.name}</h1>
+          <p className="text-white/80 text-xs sm:text-sm mt-1">Reserva tu cita online</p>
         </div>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 py-6">
+      <div className="flex-1 max-w-lg mx-auto w-full px-4 py-4 sm:py-6">
         {/* Progress */}
-        <div className="flex items-center justify-center gap-2 mb-8">
+        <div className="flex items-center justify-center gap-1 sm:gap-2 mb-6 sm:mb-8">
           {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center gap-2">
+            <div key={s} className="flex items-center gap-1 sm:gap-2">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium ${
                   step >= s ? 'text-white' : 'bg-gray-200 text-gray-500'
                 }`}
               style={step >= s ? { backgroundColor: business.brandColor ?? '#4F46E5' } : {}}
@@ -171,7 +171,7 @@ export default function PublicBooking() {
               </div>
               {s < 3 && (
                 <div
-                  className={`w-12 h-0.5 ${
+                  className={`w-8 sm:w-12 h-0.5 ${
                     step > s ? 'bg-indigo-600' : 'bg-gray-200'
                   }`}
                 />
@@ -183,7 +183,7 @@ export default function PublicBooking() {
         {/* Step 1: Select Service */}
         {step >= 1 && (
           <div className={`mb-6 ${step > 1 ? 'opacity-60' : ''}`}>
-            <h2 className="font-semibold text-gray-800 mb-3">
+            <h2 className="font-semibold text-gray-800 mb-3 text-sm sm:text-base">
               {step === 1 ? 'Elige un servicio' : `Servicio: ${selectedService?.name}`}
             </h2>
             {step === 1 ? (
@@ -192,11 +192,11 @@ export default function PublicBooking() {
                   <button
                     key={svc.id}
                     onClick={() => selectService(svc)}
-                    className="w-full bg-white border border-gray-200 rounded-xl p-4 text-left hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
+                    className="w-full bg-white border border-gray-200 rounded-xl p-3 sm:p-4 text-left hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
                   >
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-gray-800">{svc.name}</span>
-                      <span className="text-sm text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="font-medium text-gray-800 text-sm sm:text-base truncate">{svc.name}</span>
+                      <span className="text-xs sm:text-sm text-indigo-600 bg-indigo-50 px-2 sm:px-3 py-1 rounded-full whitespace-nowrap">
                         {svc.durationMinutes} min
                       </span>
                     </div>
@@ -206,7 +206,7 @@ export default function PublicBooking() {
             ) : (
               <button
                 onClick={() => { setStep(1); setSelectedSlot(null) }}
-                className="text-sm text-indigo-600 hover:underline"
+                className="text-xs sm:text-sm text-indigo-600 hover:underline"
               >
                 Cambiar servicio
               </button>
@@ -217,7 +217,7 @@ export default function PublicBooking() {
         {/* Step 2: Select Date + Slot */}
         {step >= 2 && (
           <div className={`mb-6 ${step > 2 ? 'opacity-60' : ''}`}>
-            <h2 className="font-semibold text-gray-800 mb-3">Elige fecha y horario</h2>
+            <h2 className="font-semibold text-gray-800 mb-3 text-sm sm:text-base">Elige fecha y horario</h2>
 
             <div className="mb-4">
               <input
@@ -225,16 +225,16 @@ export default function PublicBooking() {
                 value={date}
                 min={today}
                 onChange={(e) => fetchSlots(e.target.value)}
-                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                className="w-full bg-white border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
               />
             </div>
 
             {loadingSlots && (
-              <p className="text-gray-400 text-sm text-center py-4">Buscando horarios...</p>
+              <p className="text-gray-400 text-xs sm:text-sm text-center py-4">Buscando horarios...</p>
             )}
 
             {!loadingSlots && date && slots.length === 0 && (
-              <div className="bg-amber-50 text-amber-700 rounded-lg p-4 text-sm text-center">
+              <div className="bg-amber-50 text-amber-700 rounded-lg p-3 sm:p-4 text-xs sm:text-sm text-center">
                 No hay horarios disponibles para esta fecha
               </div>
             )}
@@ -245,7 +245,7 @@ export default function PublicBooking() {
                   <button
                     key={slot.startTime}
                     onClick={() => selectSlot(slot)}
-                    className="py-3 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
+                    className="py-2 sm:py-3 bg-white border border-gray-200 rounded-lg text-xs sm:text-sm font-medium text-gray-700 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
                   >
                     {formatTime(slot.startTime)}
                   </button>
@@ -255,7 +255,7 @@ export default function PublicBooking() {
 
             {step > 2 && selectedSlot && (
               <div>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs sm:text-sm text-gray-600">
                   {new Date(selectedSlot.startTime).toLocaleDateString('es', {
                     weekday: 'long',
                     day: 'numeric',
@@ -265,7 +265,7 @@ export default function PublicBooking() {
                 </p>
                 <button
                   onClick={() => { setStep(2); setSelectedSlot(null) }}
-                  className="text-sm text-indigo-600 hover:underline mt-1"
+                  className="text-xs sm:text-sm text-indigo-600 hover:underline mt-1"
                 >
                   Cambiar horario
                 </button>
@@ -277,10 +277,10 @@ export default function PublicBooking() {
         {/* Step 3: Confirm */}
         {step === 3 && selectedSlot && (
           <div>
-            <h2 className="font-semibold text-gray-800 mb-3">Confirma tu cita</h2>
+            <h2 className="font-semibold text-gray-800 mb-3 text-sm sm:text-base">Confirma tu cita</h2>
 
-            <div className="bg-indigo-50 rounded-xl p-4 mb-4">
-              <div className="text-sm text-indigo-700 space-y-1">
+            <div className="bg-indigo-50 rounded-xl p-3 sm:p-4 mb-4">
+              <div className="text-xs sm:text-sm text-indigo-700 space-y-1">
                 <p><strong>Servicio:</strong> {selectedService.name}</p>
                 <p>
                   <strong>Fecha:</strong>{' '}
@@ -299,7 +299,7 @@ export default function PublicBooking() {
 
             <form onSubmit={handleBook} className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Tu nombre *
                 </label>
                 <input
@@ -308,11 +308,11 @@ export default function PublicBooking() {
                   onChange={(e) => setCustomerName(e.target.value)}
                   placeholder="Ej: Juan Pérez"
                   required
-                  className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Email (para confirmación)
                 </label>
                 <input
@@ -320,11 +320,11 @@ export default function PublicBooking() {
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
                   placeholder="Ej: juan@email.com"
-                  className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Teléfono (opcional)
                 </label>
                 <input
@@ -332,18 +332,18 @@ export default function PublicBooking() {
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   placeholder="Ej: 809-555-1234"
-                  className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                 />
               </div>
 
               {bookingError && (
-                <p className="text-red-500 text-sm">{bookingError}</p>
+                <p className="text-red-500 text-xs sm:text-sm">{bookingError}</p>
               )}
 
               <button
                 type="submit"
                 disabled={booking || !customerName.trim()}
-                className="w-full text-white py-3 rounded-lg font-medium disabled:opacity-50 transition-colors text-sm"
+                className="w-full text-white py-2.5 sm:py-3 rounded-lg font-medium disabled:opacity-50 transition-colors text-sm"
               style={{ backgroundColor: business.brandColor ?? '#4F46E5' }}
               >
                 {booking ? 'Reservando...' : 'Confirmar Cita'}

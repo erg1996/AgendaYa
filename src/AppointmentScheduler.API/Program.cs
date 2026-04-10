@@ -102,6 +102,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<CsrfMiddleware>();
 
 // Security headers
 app.Use(async (context, next) =>

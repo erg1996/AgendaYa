@@ -27,18 +27,19 @@ public class SmtpEmailService : IEmailService
         string? brandColor = null,
         string? logoUrl = null)
     {
-        var smtpHost = _config["Email:SmtpHost"];
+        // Read SMTP config from environment variables only (never from config files)
+        var smtpHost = Environment.GetEnvironmentVariable("SMTP_HOST");
         if (string.IsNullOrEmpty(smtpHost))
         {
-            _logger.LogWarning("Email not configured (Email:SmtpHost missing). Skipping email to {Email}", toEmail);
+            _logger.LogWarning("Email not configured (SMTP_HOST env var missing). Skipping email to {Email}", toEmail);
             return;
         }
 
-        var smtpPort = int.Parse(_config["Email:SmtpPort"] ?? "587");
-        var fromEmail = _config["Email:From"] ?? "noreply@agendaya.app";
-        var fromName = _config["Email:FromName"] ?? "AgendaYa";
-        var username = _config["Email:Username"] ?? "";
-        var password = _config["Email:Password"] ?? "";
+        var smtpPort = int.Parse(Environment.GetEnvironmentVariable("SMTP_PORT") ?? "587");
+        var fromEmail = Environment.GetEnvironmentVariable("SMTP_FROM") ?? "noreply@agendaya.app";
+        var fromName = Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "AgendaYa";
+        var username = Environment.GetEnvironmentVariable("SMTP_USERNAME") ?? "";
+        var password = Environment.GetEnvironmentVariable("SMTP_PASSWORD") ?? "";
 
         var endTime = appointmentDate.AddMinutes(durationMinutes);
         var dateStr = appointmentDate.ToString("dddd, dd 'de' MMMM 'de' yyyy", new System.Globalization.CultureInfo("es"));
@@ -127,18 +128,19 @@ public class SmtpEmailService : IEmailService
         string? brandColor = null,
         string? logoUrl = null)
     {
-        var smtpHost = _config["Email:SmtpHost"];
+        // Read SMTP config from environment variables only (never from config files)
+        var smtpHost = Environment.GetEnvironmentVariable("SMTP_HOST");
         if (string.IsNullOrEmpty(smtpHost))
         {
-            _logger.LogWarning("Email not configured. Skipping reminder to {Email}", toEmail);
+            _logger.LogWarning("Email not configured (SMTP_HOST env var missing). Skipping reminder to {Email}", toEmail);
             return;
         }
 
-        var smtpPort = int.Parse(_config["Email:SmtpPort"] ?? "587");
-        var fromEmail = _config["Email:From"] ?? "noreply@agendaya.app";
-        var fromName = _config["Email:FromName"] ?? "AgendaYa";
-        var username = _config["Email:Username"] ?? "";
-        var password = _config["Email:Password"] ?? "";
+        var smtpPort = int.Parse(Environment.GetEnvironmentVariable("SMTP_PORT") ?? "587");
+        var fromEmail = Environment.GetEnvironmentVariable("SMTP_FROM") ?? "noreply@agendaya.app";
+        var fromName = Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "AgendaYa";
+        var username = Environment.GetEnvironmentVariable("SMTP_USERNAME") ?? "";
+        var password = Environment.GetEnvironmentVariable("SMTP_PASSWORD") ?? "";
 
         var endTime = appointmentDate.AddMinutes(durationMinutes);
         var dateStr = appointmentDate.ToString("dddd, dd 'de' MMMM 'de' yyyy", new System.Globalization.CultureInfo("es"));

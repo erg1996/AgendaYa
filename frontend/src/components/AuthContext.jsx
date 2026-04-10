@@ -4,22 +4,24 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [auth, setAuth] = useState(() => {
-    const saved = localStorage.getItem('auth')
+    // Use sessionStorage instead of localStorage (clears on tab close)
+    // httpOnly cookies would be ideal but requires backend support
+    const saved = sessionStorage.getItem('auth')
     return saved ? JSON.parse(saved) : null
   })
 
   const saveAuth = (data) => {
     setAuth(data)
     if (data) {
-      localStorage.setItem('auth', JSON.stringify(data))
+      sessionStorage.setItem('auth', JSON.stringify(data))
     } else {
-      localStorage.removeItem('auth')
+      sessionStorage.removeItem('auth')
     }
   }
 
   const logout = () => {
     saveAuth(null)
-    localStorage.removeItem('activeBusiness')
+    sessionStorage.removeItem('activeBusiness')
   }
 
   return (
