@@ -1,6 +1,7 @@
 using AppointmentScheduler.Application.DTOs;
 using AppointmentScheduler.Application.Exceptions;
 using AppointmentScheduler.Application.Interfaces;
+using AppointmentScheduler.Application.Utils;
 using AppointmentScheduler.Domain.Entities;
 
 namespace AppointmentScheduler.Application.Services;
@@ -137,7 +138,51 @@ public class AppointmentService
         return ToResponse(appointment);
     }
 
+    public async Task<List<PendingReminderResponse>> GetPendingWhatsAppRemindersAsync(Guid businessId)
+    {
+        var (from, to) = GetTomorrowUtcWindow();
+        var appointments = await _appointmentRepository.GetPendingWhatsAppRemindersByBusinessAsync(businessId, from, to);
+
+        var business = await _businessRepository.GetByIdAsync(businessId);
+        var template = business?.WhatsAppReminderTemplate;
+
+        return appointments.Select(a =>
+        {
+            var phone = PhoneNormalizer.NormalizeForWaMe(a.CustomerPhone)!;
+            var message = WhatsAppTemplateRenderer.Render(template, a.CustomerName, a.Business.Name, a.Service.Name, a.AppointmentDate);
+            var url = WhatsAppTemplateRenderer.BuildWaUrl(phone, message);
+            return new PendingReminderResponse(a.Id, a.CustomerName, a.CustomerPhone!, a.AppointmentDate, a.Service.Name, a.Business.Name, url, a.WhatsAppReminderSent);
+        }).ToList();
+    }
+
+    public async Task MarkWhatsAppReminderSentAsync(Guid id, Guid businessId)
+    {
+        var appointment = await _appointmentRepository.GetByIdAsync(id)
+            ?? throw new NotFoundException($"Appointment '{id}' not found.");
+
+        if (appointment.BusinessId != businessId)
+            throw new ForbiddenException("Appointment does not belong to this business.");
+
+        appointment.WhatsAppReminderSent = true;
+        await _appointmentRepository.SaveChangesAsync();
+    }
+
+    // Returns UTC window for "tomorrow" in El Salvador (UTC-6, no DST)
+    private static (DateTime From, DateTime To) GetTomorrowUtcWindow()
+    {
+        TimeZoneInfo tz;
+        try { tz = TimeZoneInfo.FindSystemTimeZoneById("America/El_Salvador"); }
+        catch { tz = TimeZoneInfo.FindSystemTimeZoneById("Central America Standard Time"); }
+
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+        var tomorrowLocalMidnight = localNow.Date.AddDays(1);
+        var from = TimeZoneInfo.ConvertTimeToUtc(tomorrowLocalMidnight, tz);
+        var to = from.AddDays(1);
+        return (from, to);
+    }
+
     private static AppointmentResponse ToResponse(Appointment a) =>
         new(a.Id, a.BusinessId, a.ServiceId, a.CustomerName, a.CustomerEmail, a.CustomerPhone,
-            a.AppointmentDate, a.DurationMinutes, a.EndTime, a.Status.ToString(), a.Notes, a.CreatedAt);
+            a.AppointmentDate, a.DurationMinutes, a.EndTime, a.Status.ToString(), a.Notes,
+            a.WhatsAppReminderSent, a.CreatedAt);
 }

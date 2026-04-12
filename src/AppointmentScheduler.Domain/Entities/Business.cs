@@ -7,6 +7,7 @@ public class Business
     public string Slug { get; set; } = string.Empty;
     public string? LogoUrl { get; set; }
     public string? BrandColor { get; set; }
+    public string? WhatsAppReminderTemplate { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public List<Service> Services { get; set; } = new();

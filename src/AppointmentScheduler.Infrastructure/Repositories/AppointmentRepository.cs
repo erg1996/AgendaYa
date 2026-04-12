@@ -53,6 +53,19 @@ public class AppointmentRepository : IAppointmentRepository
                      && a.CustomerEmail != null)
             .ToListAsync();
 
+    // For WhatsApp reminder dashboard: tomorrow's appointments for a specific business with a phone number
+    public async Task<List<Appointment>> GetPendingWhatsAppRemindersByBusinessAsync(Guid businessId, DateTime from, DateTime to) =>
+        await _context.Appointments
+            .Include(a => a.Business)
+            .Include(a => a.Service)
+            .Where(a => a.BusinessId == businessId
+                     && a.AppointmentDate >= from
+                     && a.AppointmentDate < to
+                     && !string.IsNullOrEmpty(a.CustomerPhone)
+                     && a.Status != AppointmentStatus.Cancelled)
+            .OrderBy(a => a.AppointmentDate)
+            .ToListAsync();
+
     public async Task AddAsync(Appointment appointment) =>
         await _context.Appointments.AddAsync(appointment);
 

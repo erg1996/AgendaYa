@@ -13,6 +13,7 @@ import {
   deleteBlockedDate,
   getAllBusinesses,
   updateBusiness,
+  updateBusinessWhatsAppTemplate,
   uploadLogo,
 } from '../api/client'
 
@@ -36,6 +37,7 @@ export default function BusinessPanel() {
     { key: 'services', label: 'Servicios' },
     { key: 'hours', label: 'Horarios' },
     { key: 'blocked', label: 'Dias Bloqueados' },
+    { key: 'whatsapp', label: 'WhatsApp' },
   ]
 
   return (
@@ -76,6 +78,7 @@ export default function BusinessPanel() {
       )}
       {tab === 'hours' && <WorkingHoursTab businessId={business.id} />}
       {tab === 'blocked' && <BlockedDatesTab businessId={business.id} />}
+      {tab === 'whatsapp' && <WhatsAppTab business={business} />}
     </div>
   )
 }
@@ -648,6 +651,118 @@ function WorkingHoursTab({ businessId }) {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+const DEFAULT_TEMPLATE = `Hola {cliente} 👋
+
+Te recordamos tu cita en *{negocio}* mañana:
+
+📅 {fecha}
+🕐 {hora}
+💈 {servicio}
+
+Si necesitas cancelar o cambiar tu cita, por favor contáctanos.
+
+¡Te esperamos!`
+
+function WhatsAppTab({ business }) {
+  const { setBusiness } = useBusiness()
+  const [template, setTemplate] = useState(business.whatsAppReminderTemplate ?? '')
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState({ type: '', text: '' })
+
+  const previewText = (template || DEFAULT_TEMPLATE)
+    .replace('{cliente}', 'María García')
+    .replace('{negocio}', business.name)
+    .replace('{servicio}', 'Corte de cabello')
+    .replace('{fecha}', 'lunes 14 de abril')
+    .replace('{hora}', '10:00 AM')
+
+  const handleSave = async () => {
+    setSaving(true)
+    setMessage({ type: '', text: '' })
+    try {
+      const updated = await updateBusinessWhatsAppTemplate(business.id, template.trim() || null)
+      setBusiness(updated)
+      setMessage({ type: 'success', text: 'Mensaje de WhatsApp guardado' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
+        <h2 className="font-semibold text-gray-800 mb-1">Mensaje de recordatorio</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Este mensaje se enviará a tus clientes desde la sección{' '}
+          <span className="font-medium text-gray-700">Recordatorios</span>.
+          Usa los siguientes marcadores que se reemplazan automáticamente:
+        </p>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          {['{cliente}', '{negocio}', '{servicio}', '{fecha}', '{hora}'].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setTemplate((t) => t + p)}
+              className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-mono hover:bg-indigo-100 transition-colors"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          value={template}
+          onChange={(e) => setTemplate(e.target.value)}
+          rows={10}
+          placeholder={DEFAULT_TEMPLATE}
+          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
+        />
+
+        <p className="text-xs text-gray-400 mt-1">
+          Si dejas el campo vacío se usará el mensaje predeterminado.
+        </p>
+
+        {message.text && (
+          <p className={`text-sm mt-2 ${message.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+            {message.text}
+          </p>
+        )}
+
+        <div className="flex gap-3 mt-4">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Guardando...' : 'Guardar mensaje'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTemplate('')}
+            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            Restablecer predeterminado
+          </button>
+        </div>
+      </div>
+
+      {/* Preview */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
+        <h2 className="font-semibold text-gray-800 mb-3">Vista previa</h2>
+        <div className="bg-[#ECE5DD] rounded-xl p-4 max-w-sm">
+          <div className="bg-white rounded-xl px-4 py-3 shadow-sm text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+            {previewText}
+          </div>
+          <p className="text-right text-[10px] text-gray-400 mt-1">10:00 AM ✓✓</p>
+        </div>
       </div>
     </div>
   )

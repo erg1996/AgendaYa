@@ -22,6 +22,7 @@ public record AppointmentResponse(
     DateTime EndTime,
     string Status,
     string? Notes,
+    bool WhatsAppReminderSent,
     DateTime CreatedAt);
 
 public record UpdateAppointmentStatusRequest(

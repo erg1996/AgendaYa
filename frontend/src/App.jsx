@@ -11,6 +11,7 @@ import PublicBooking from './pages/PublicBooking'
 import BookingConfirmation from './pages/BookingConfirmation'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import Reminders from './pages/Reminders'
 
 function Layout() {
   const { pathname } = useLocation()
@@ -54,6 +55,7 @@ function Layout() {
           <Route path="/calendar" element={<CalendarView />} />
           <Route path="/book" element={<BookAppointment />} />
           <Route path="/appointments" element={<AppointmentsList />} />
+          <Route path="/reminders" element={<Reminders />} />
         </Routes>
       </main>
     </div>

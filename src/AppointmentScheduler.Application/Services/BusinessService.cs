@@ -83,6 +83,8 @@ public class BusinessService
             business.BrandColor = string.IsNullOrWhiteSpace(request.BrandColor) ? null : request.BrandColor.Trim();
         if (request.LogoUrl != null)
             business.LogoUrl = string.IsNullOrWhiteSpace(request.LogoUrl) ? null : request.LogoUrl.Trim();
+        if (request.WhatsAppReminderTemplate != null)
+            business.WhatsAppReminderTemplate = string.IsNullOrWhiteSpace(request.WhatsAppReminderTemplate) ? null : request.WhatsAppReminderTemplate.Trim();
 
         await _repository.SaveChangesAsync();
 
@@ -97,7 +99,7 @@ public class BusinessService
     }
 
     private static BusinessResponse ToResponse(Business b) =>
-        new(b.Id, b.Name, b.Slug, b.LogoUrl, b.BrandColor, b.CreatedAt);
+        new(b.Id, b.Name, b.Slug, b.LogoUrl, b.BrandColor, b.WhatsAppReminderTemplate, b.CreatedAt);
 
     public static string GenerateSlug(string name)
     {

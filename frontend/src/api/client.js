@@ -74,6 +74,9 @@ export const createBusiness = (data) =>
 export const updateBusiness = (id, data) =>
   authRequest(`/api/business/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 
+export const updateBusinessWhatsAppTemplate = (id, whatsAppReminderTemplate) =>
+  authRequest(`/api/business/${id}`, { method: 'PUT', body: JSON.stringify({ whatsAppReminderTemplate }) })
+
 // ─── Services ────────────────────────────────────────────────────────────────
 export const getServices = (businessId) =>
   publicRequest(`/api/services?businessId=${businessId}`)
@@ -123,6 +126,12 @@ export const login = (data) =>
 // ─── Appointments ─────────────────────────────────────────────────────────────
 export const createAppointment = (data) =>
   publicRequest('/api/appointments', { method: 'POST', body: JSON.stringify(data) })
+
+export const getPendingWhatsAppReminders = (businessId) =>
+  authRequest(`/api/appointments/reminders/pending?businessId=${businessId}`)
+
+export const markWhatsAppReminderSent = (appointmentId, businessId) =>
+  authRequest(`/api/appointments/${appointmentId}/reminders/whatsapp?businessId=${businessId}`, { method: 'POST' })
 
 export const getAppointments = (businessId, page = 1, pageSize = 50) =>
   authRequest(`/api/appointments?businessId=${businessId}&page=${page}&pageSize=${pageSize}`)

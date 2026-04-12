@@ -27,6 +27,7 @@ export default function PublicBooking() {
   const [customerName, setCustomerName] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
+  const [whatsAppConsent, setWhatsAppConsent] = useState(false)
   const [booking, setBooking] = useState(false)
   const [bookingError, setBookingError] = useState('')
 
@@ -78,6 +79,11 @@ export default function PublicBooking() {
   const handleBook = async (e) => {
     e.preventDefault()
     if (!selectedSlot || !customerName.trim()) return
+    // Phone requires consent; consent without phone is ignored
+    if (customerPhone.trim() && !whatsAppConsent) {
+      setBookingError('Debes aceptar recibir recordatorios por WhatsApp para ingresar tu número.')
+      return
+    }
     setBooking(true)
     setBookingError('')
     try {
@@ -86,6 +92,8 @@ export default function PublicBooking() {
         serviceId: selectedService.id,
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim() || null,
+        // Only send phone when consent is given
+        customerPhone: whatsAppConsent && customerPhone.trim() ? customerPhone.trim() : null,
         appointmentDate: selectedSlot.startTime,
       })
       navigate(`/book/${slug}/confirmed`, {
@@ -325,15 +333,34 @@ export default function PublicBooking() {
               </div>
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                  Teléfono (opcional)
+                  Número de WhatsApp
+                  <span className="text-gray-400 font-normal ml-1">(para recordatorio)</span>
                 </label>
                 <input
                   type="tel"
                   value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="Ej: 809-555-1234"
+                  onChange={(e) => {
+                    setCustomerPhone(e.target.value)
+                    // Clear consent if phone is cleared
+                    if (!e.target.value.trim()) setWhatsAppConsent(false)
+                  }}
+                  placeholder="Ej: 7890-1234"
                   className="w-full bg-white border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                 />
+                {customerPhone.trim() && (
+                  <label className="flex items-start gap-2 mt-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={whatsAppConsent}
+                      onChange={(e) => setWhatsAppConsent(e.target.checked)}
+                      required={!!customerPhone.trim()}
+                      className="mt-0.5 accent-indigo-600"
+                    />
+                    <span className="text-xs text-gray-500">
+                      Acepto recibir un recordatorio de mi cita por WhatsApp al número ingresado.
+                    </span>
+                  </label>
+                )}
               </div>
 
               {bookingError && (

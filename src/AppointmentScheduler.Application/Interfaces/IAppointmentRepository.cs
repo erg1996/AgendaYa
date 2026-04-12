@@ -10,6 +10,7 @@ public interface IAppointmentRepository
     Task<List<Appointment>> GetByBusinessIdAndDateAsync(Guid businessId, DateTime date);
     Task<List<Appointment>> GetUpcomingForRemindersAsync(DateTime from, DateTime to);
     Task<List<Appointment>> GetByBusinessIdAndDateRangeAsync(Guid businessId, DateTime from, DateTime to);
+    Task<List<Appointment>> GetPendingWhatsAppRemindersByBusinessAsync(Guid businessId, DateTime from, DateTime to);
     Task AddAsync(Appointment appointment);
     Task SaveChangesAsync();
 }

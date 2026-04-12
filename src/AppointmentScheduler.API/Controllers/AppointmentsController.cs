@@ -59,4 +59,24 @@ public class AppointmentsController : ControllerBase
         var result = await _appointmentService.UpdateNotesAsync(id, businessId, request.Notes);
         return Ok(result);
     }
+
+    [Authorize]
+    [HttpGet("reminders/pending")]
+    public async Task<IActionResult> GetPendingWhatsAppReminders([FromQuery] Guid businessId)
+    {
+        var userId = User.GetUserId();
+        await _businessService.ValidateOwnershipAsync(userId, businessId);
+        var results = await _appointmentService.GetPendingWhatsAppRemindersAsync(businessId);
+        return Ok(results);
+    }
+
+    [Authorize]
+    [HttpPost("{id:guid}/reminders/whatsapp")]
+    public async Task<IActionResult> MarkWhatsAppReminderSent(Guid id, [FromQuery] Guid businessId)
+    {
+        var userId = User.GetUserId();
+        await _businessService.ValidateOwnershipAsync(userId, businessId);
+        await _appointmentService.MarkWhatsAppReminderSentAsync(id, businessId);
+        return NoContent();
+    }
 }

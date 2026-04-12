@@ -30,6 +30,14 @@ public class AuthService
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
     {
+        // Validate invite code — read from env var REGISTRATION_INVITE_CODE
+        var configuredCode = Environment.GetEnvironmentVariable("REGISTRATION_INVITE_CODE");
+        if (!string.IsNullOrWhiteSpace(configuredCode) &&
+            !string.Equals(request.InviteCode.Trim(), configuredCode.Trim(), StringComparison.Ordinal))
+        {
+            throw new ForbiddenException("Código de invitación inválido.");
+        }
+
         // Validate password complexity
         ValidatePassword(request.Password);
 

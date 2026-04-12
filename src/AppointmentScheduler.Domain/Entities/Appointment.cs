@@ -21,6 +21,7 @@ public class Appointment
     public AppointmentStatus Status { get; set; } = AppointmentStatus.Pending;
     public string? Notes { get; set; }
     public bool ReminderSent { get; set; }
+    public bool WhatsAppReminderSent { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public DateTime EndTime => AppointmentDate.AddMinutes(DurationMinutes);

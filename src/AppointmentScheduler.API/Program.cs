@@ -87,18 +87,11 @@ builder.Services.AddHostedService<ReminderBackgroundService>();
 
 var app = builder.Build();
 
-// Database: use EnsureCreated for dev, migrations for prod
+// Database: always use Migrate() so schema changes via migrations are applied automatically
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    if (app.Environment.IsDevelopment())
-    {
-        db.Database.EnsureCreated();
-    }
-    else
-    {
-        db.Database.Migrate();
-    }
+    db.Database.Migrate();
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();

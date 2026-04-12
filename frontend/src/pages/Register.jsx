@@ -7,7 +7,7 @@ import { AgendaYaLogo } from '../components/Icons'
 export default function Register() {
   const { saveAuth } = useAuth()
   const navigate = useNavigate()
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', businessName: '' })
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', businessName: '', inviteCode: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -99,6 +99,17 @@ export default function Register() {
               onChange={update('businessName')}
               required
               placeholder="Mi Barbería"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Código de acceso</label>
+            <input
+              type="password"
+              value={form.inviteCode}
+              onChange={update('inviteCode')}
+              required
+              placeholder="Ingresa el código que te fue proporcionado"
               className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
             />
           </div>

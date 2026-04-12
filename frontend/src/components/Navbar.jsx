@@ -7,6 +7,7 @@ import {
   CalendarIcon,
   ListIcon,
   PencilIcon,
+  BellIcon,
 } from './Icons'
 
 const links = [
@@ -14,6 +15,7 @@ const links = [
   { to: '/business', label: 'Mi Negocio', Icon: StoreIcon },
   { to: '/calendar', label: 'Calendario', Icon: CalendarIcon },
   { to: '/appointments', label: 'Citas', Icon: ListIcon },
+  { to: '/reminders', label: 'Recordatorios', Icon: BellIcon },
   { to: '/book', label: 'Reservar', Icon: PencilIcon },
 ]
 

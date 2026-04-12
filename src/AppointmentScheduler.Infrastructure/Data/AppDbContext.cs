@@ -24,6 +24,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Slug).IsRequired().HasMaxLength(200);
             entity.Property(e => e.LogoUrl).HasMaxLength(500);
             entity.Property(e => e.BrandColor).HasMaxLength(20);
+            entity.Property(e => e.WhatsAppReminderTemplate).HasMaxLength(2000);
             entity.HasIndex(e => e.Slug).IsUnique();
         });
 
@@ -50,6 +51,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Status).HasConversion<int>().HasDefaultValue(AppointmentStatus.Pending);
             entity.Property(e => e.Notes).HasMaxLength(1000);
             entity.Property(e => e.ReminderSent).HasDefaultValue(false);
+            entity.Property(e => e.WhatsAppReminderSent).HasDefaultValue(false);
             entity.Ignore(e => e.EndTime);
             entity.HasIndex(e => new { e.BusinessId, e.AppointmentDate });
             entity.HasIndex(e => e.ServiceId);
