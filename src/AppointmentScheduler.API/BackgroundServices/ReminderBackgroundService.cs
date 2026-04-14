@@ -41,10 +41,10 @@ public class ReminderBackgroundService : BackgroundService
     {
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var appointmentRepo = scope.ServiceProvider.GetRequiredService<IAppointmentRepository>();
         var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
 
         var now = DateTime.UtcNow;
-        // Window: 22h to 26h from now (4h window to account for service restarts/delays)
         var windowStart = now.AddHours(22);
         var windowEnd = now.AddHours(26);
 
@@ -60,24 +60,40 @@ public class ReminderBackgroundService : BackgroundService
 
         if (appointments.Count == 0) return;
 
-        _logger.LogInformation("Sending {Count} reminder emails", appointments.Count);
+        var sent = 0;
+        var skipped = 0;
 
         foreach (var a in appointments)
         {
-            await emailService.SendAppointmentReminderAsync(
-                a.CustomerEmail!,
-                a.CustomerName,
-                a.Business.Name,
-                a.Service.Name,
-                a.AppointmentDate,
-                a.DurationMinutes,
-                a.Business.BrandColor,
-                a.Business.LogoUrl);
+            // Claim the send-right atomically. Another instance running in parallel
+            // will see affected=0 and skip. This trades "at-most-once" (safer) for
+            // the rare case where SMTP succeeds after a claim and the email is lost.
+            var claimed = await appointmentRepo.ClaimReminderAsync(a.Id);
+            if (!claimed)
+            {
+                skipped++;
+                continue;
+            }
 
-            a.ReminderSent = true;
+            try
+            {
+                await emailService.SendAppointmentReminderAsync(
+                    a.CustomerEmail!,
+                    a.CustomerName,
+                    a.Business.Name,
+                    a.Service.Name,
+                    a.AppointmentDate,
+                    a.DurationMinutes,
+                    a.Business.BrandColor,
+                    a.Business.LogoUrl);
+                sent++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send reminder for appointment {Id} after claim", a.Id);
+            }
         }
 
-        await db.SaveChangesAsync();
-        _logger.LogInformation("Reminder emails sent for {Count} appointments", appointments.Count);
+        _logger.LogInformation("Reminders: sent={Sent} skipped={Skipped} total={Total}", sent, skipped, appointments.Count);
     }
 }

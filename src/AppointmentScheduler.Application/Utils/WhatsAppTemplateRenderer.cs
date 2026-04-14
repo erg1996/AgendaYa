@@ -5,22 +5,23 @@ namespace AppointmentScheduler.Application.Utils;
 public static class WhatsAppTemplateRenderer
 {
     public const string DefaultTemplate =
-        "Hola {cliente} 👋\n\nTe recordamos tu cita en *{negocio}* mañana:\n\n📅 {fecha}\n🕐 {hora}\n💈 {servicio}\n\nSi necesitas cancelar o cambiar tu cita, por favor contáctanos.\n\n¡Te esperamos!";
+        "Hola {cliente} 👋\n\nTe recordamos tu cita en *{negocio}* mañana:\n\n📅 {fecha}\n🕐 {hora}\n💈 {servicio}\n\n✅ Confirmar: {confirmar_url}\n❌ Cancelar: {cancelar_url}\n\n¡Te esperamos!";
 
     private static readonly CultureInfo EsCulture = new("es");
 
     /// <summary>
     /// Renders a WhatsApp reminder message.
-    /// Placeholders: {cliente}, {negocio}, {servicio}, {fecha}, {hora}
+    /// Placeholders: {cliente}, {negocio}, {servicio}, {fecha}, {hora}, {confirmar_url}, {cancelar_url}
     /// </summary>
     public static string Render(
         string? template,
         string customerName,
         string businessName,
         string serviceName,
-        DateTime appointmentDate)
+        DateTime appointmentDate,
+        string? confirmUrl = null,
+        string? cancelUrl = null)
     {
-        // appointmentDate is already in El Salvador local time — no conversion needed
         var t = string.IsNullOrWhiteSpace(template) ? DefaultTemplate : template;
 
         return t
@@ -28,7 +29,9 @@ public static class WhatsAppTemplateRenderer
             .Replace("{negocio}", businessName)
             .Replace("{servicio}", serviceName)
             .Replace("{fecha}", appointmentDate.ToString("dddd d 'de' MMMM", EsCulture))
-            .Replace("{hora}", appointmentDate.ToString("h:mm tt", CultureInfo.InvariantCulture).ToUpper());
+            .Replace("{hora}", appointmentDate.ToString("h:mm tt", CultureInfo.InvariantCulture).ToUpper())
+            .Replace("{confirmar_url}", confirmUrl ?? "")
+            .Replace("{cancelar_url}", cancelUrl ?? "");
     }
 
     public static string BuildWaUrl(string phoneDigitsOnly, string message) =>

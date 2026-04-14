@@ -12,6 +12,7 @@ services:
       Jwt__Secret: ${JWT_SECRET:?JWT_SECRET is required}
       ConnectionStrings__DefaultConnection: "Data Source=/app/data/scheduler.db;Cache=Shared"
       Cors__AllowedOrigins__0: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}
+      PublicUrl__AppBaseUrl: ${PUBLIC_URL:?PUBLIC_URL is required}
     volumes:
       - agendaya-data:/app/data
       - agendaya-uploads:/app/wwwroot/uploads

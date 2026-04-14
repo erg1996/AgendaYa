@@ -29,5 +29,7 @@ public interface IAppointmentRepository
     Task<DashboardAggregates> GetDashboardAggregatesAsync(
         Guid businessId, DateTime today, DateTime weekStart, DateTime weekEnd, DateTime monthStart, DateTime monthEnd);
     Task AddAsync(Appointment appointment);
+    Task<bool> TryCreateWithOverlapCheckAsync(Appointment appointment);
+    Task<bool> ClaimReminderAsync(Guid appointmentId);
     Task SaveChangesAsync();
 }

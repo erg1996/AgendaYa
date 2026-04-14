@@ -118,6 +118,48 @@ public class AppointmentRepository : IAppointmentRepository
     public async Task AddAsync(Appointment appointment) =>
         await _context.Appointments.AddAsync(appointment);
 
+    // Atomic: serializable transaction that re-checks for overlap after acquiring
+    // a write lock, then inserts. Returns false if a concurrent appointment now
+    // conflicts (caller should translate to ConflictException).
+    public async Task<bool> TryCreateWithOverlapCheckAsync(Appointment appointment)
+    {
+        await using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+
+        var newStart = appointment.AppointmentDate;
+        var newEnd = newStart.AddMinutes(appointment.DurationMinutes);
+        var dayStart = newStart.Date;
+        var dayEnd = dayStart.AddDays(1);
+
+        var conflict = await _context.Appointments
+            .Where(a => a.BusinessId == appointment.BusinessId
+                     && a.Status != AppointmentStatus.Cancelled
+                     && a.AppointmentDate >= dayStart
+                     && a.AppointmentDate < dayEnd)
+            .AnyAsync(a => newStart < a.AppointmentDate.AddMinutes(a.DurationMinutes)
+                        && a.AppointmentDate < newEnd);
+
+        if (conflict)
+        {
+            await tx.RollbackAsync();
+            return false;
+        }
+
+        await _context.Appointments.AddAsync(appointment);
+        await _context.SaveChangesAsync();
+        await tx.CommitAsync();
+        return true;
+    }
+
+    // Atomic claim of reminder send rights. Returns true if this caller claimed
+    // it (should send); false if another process already did.
+    public async Task<bool> ClaimReminderAsync(Guid appointmentId)
+    {
+        var affected = await _context.Appointments
+            .Where(a => a.Id == appointmentId && !a.ReminderSent)
+            .ExecuteUpdateAsync(u => u.SetProperty(a => a.ReminderSent, true));
+        return affected == 1;
+    }
+
     public async Task SaveChangesAsync() =>
         await _context.SaveChangesAsync();
 }

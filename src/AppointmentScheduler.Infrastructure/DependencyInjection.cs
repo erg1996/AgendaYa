@@ -30,6 +30,10 @@ public static class DependencyInjection
         services.AddScoped<ServiceService>();
         services.AddScoped<WorkingHoursService>();
         services.AddScoped<AvailabilityService>();
+        var actionOptions = new AppointmentActionOptions(
+            HmacBaseSecret: configuration["Jwt:Secret"] ?? "DEV-ONLY-SECRET-KEY-CHANGE-IN-PRODUCTION-Min32Chars!!",
+            AppBaseUrl: configuration["PublicUrl:AppBaseUrl"] ?? "http://localhost:5000");
+        services.AddSingleton(actionOptions);
         services.AddScoped<AppointmentService>();
         services.AddScoped<AnalyticsService>();
         services.AddScoped<BlockedDateService>();
