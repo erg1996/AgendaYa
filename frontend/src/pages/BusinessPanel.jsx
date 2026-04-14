@@ -670,7 +670,7 @@ Si necesitas cancelar o cambiar tu cita, por favor contáctanos.
 
 function WhatsAppTab({ business }) {
   const { setBusiness } = useBusiness()
-  const [template, setTemplate] = useState(business.whatsAppReminderTemplate ?? '')
+  const [template, setTemplate] = useState(business.whatsAppReminderTemplate ?? DEFAULT_TEMPLATE)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
 

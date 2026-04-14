@@ -181,8 +181,17 @@ public class AppointmentService
         return (from, to);
     }
 
-    private static AppointmentResponse ToResponse(Appointment a) =>
-        new(a.Id, a.BusinessId, a.ServiceId, a.CustomerName, a.CustomerEmail, a.CustomerPhone,
-            a.AppointmentDate, a.DurationMinutes, a.EndTime, a.Status.ToString(), a.Notes,
+    private static AppointmentResponse ToResponse(Appointment a)
+    {
+        var effectiveStatus = a.Status;
+        if ((a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed)
+            && a.EndTime < DateTime.Now)
+        {
+            effectiveStatus = AppointmentStatus.Completed;
+        }
+
+        return new(a.Id, a.BusinessId, a.ServiceId, a.CustomerName, a.CustomerEmail, a.CustomerPhone,
+            a.AppointmentDate, a.DurationMinutes, a.EndTime, effectiveStatus.ToString(), a.Notes,
             a.WhatsAppReminderSent, a.CreatedAt);
+    }
 }
