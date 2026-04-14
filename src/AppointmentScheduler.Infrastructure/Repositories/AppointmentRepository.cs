@@ -66,6 +66,55 @@ public class AppointmentRepository : IAppointmentRepository
             .OrderBy(a => a.AppointmentDate)
             .ToListAsync();
 
+    public async Task<DashboardAggregates> GetDashboardAggregatesAsync(
+        Guid businessId, DateTime today, DateTime weekStart, DateTime weekEnd, DateTime monthStart, DateTime monthEnd)
+    {
+        var baseQ = _context.Appointments.Where(a => a.BusinessId == businessId);
+        var activeQ = baseQ.Where(a => a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed);
+
+        var activeCount = await activeQ.CountAsync();
+        var completedCount = await baseQ.CountAsync(a => a.Status == AppointmentStatus.Completed);
+        var cancelledCount = await baseQ.CountAsync(a => a.Status == AppointmentStatus.Cancelled);
+
+        var tomorrow = today.AddDays(1);
+        var todayActive = await activeQ.CountAsync(a => a.AppointmentDate >= today && a.AppointmentDate < tomorrow);
+        var weekActive = await activeQ.CountAsync(a => a.AppointmentDate >= weekStart && a.AppointmentDate < weekEnd);
+        var monthActive = await activeQ.CountAsync(a => a.AppointmentDate >= monthStart && a.AppointmentDate < monthEnd);
+
+        // Revenue joins Services so it runs in SQL, not memory.
+        var monthRevenue = await (
+            from a in _context.Appointments
+            join s in _context.Services on a.ServiceId equals s.Id
+            where a.BusinessId == businessId
+                && a.Status == AppointmentStatus.Completed
+                && a.AppointmentDate >= monthStart
+                && a.AppointmentDate < monthEnd
+            select (decimal?)s.Price ?? 0m
+        ).SumAsync();
+
+        var topService = await activeQ
+            .GroupBy(a => a.ServiceId)
+            .Select(g => new { ServiceId = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .FirstOrDefaultAsync();
+
+        var hourStats = await activeQ
+            .GroupBy(a => a.AppointmentDate.Hour)
+            .Select(g => new { Hour = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var busiest = hourStats.OrderByDescending(h => h.Count).FirstOrDefault();
+        var quietest = hourStats.OrderBy(h => h.Count).FirstOrDefault();
+
+        return new DashboardAggregates(
+            activeCount, completedCount, cancelledCount,
+            todayActive, weekActive, monthActive,
+            monthRevenue,
+            topService?.ServiceId, topService?.Count ?? 0,
+            busiest?.Hour, busiest?.Count ?? 0,
+            quietest?.Hour, quietest?.Count ?? 0);
+    }
+
     public async Task AddAsync(Appointment appointment) =>
         await _context.Appointments.AddAsync(appointment);
 

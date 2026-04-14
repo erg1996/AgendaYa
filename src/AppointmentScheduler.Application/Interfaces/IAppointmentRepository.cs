@@ -2,6 +2,21 @@ using AppointmentScheduler.Domain.Entities;
 
 namespace AppointmentScheduler.Application.Interfaces;
 
+public record DashboardAggregates(
+    int ActiveCount,
+    int CompletedCount,
+    int CancelledCount,
+    int TodayActiveCount,
+    int WeekActiveCount,
+    int MonthActiveCount,
+    decimal MonthRevenue,
+    Guid? TopServiceId,
+    int TopServiceCount,
+    int? BusiestHour,
+    int BusiestHourCount,
+    int? QuietestHour,
+    int QuietestHourCount);
+
 public interface IAppointmentRepository
 {
     Task<Appointment?> GetByIdAsync(Guid id);
@@ -11,6 +26,8 @@ public interface IAppointmentRepository
     Task<List<Appointment>> GetUpcomingForRemindersAsync(DateTime from, DateTime to);
     Task<List<Appointment>> GetByBusinessIdAndDateRangeAsync(Guid businessId, DateTime from, DateTime to);
     Task<List<Appointment>> GetPendingWhatsAppRemindersByBusinessAsync(Guid businessId, DateTime from, DateTime to);
+    Task<DashboardAggregates> GetDashboardAggregatesAsync(
+        Guid businessId, DateTime today, DateTime weekStart, DateTime weekEnd, DateTime monthStart, DateTime monthEnd);
     Task AddAsync(Appointment appointment);
     Task SaveChangesAsync();
 }

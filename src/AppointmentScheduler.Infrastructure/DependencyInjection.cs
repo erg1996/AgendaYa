@@ -39,7 +39,14 @@ public static class DependencyInjection
             var userRepo = sp.GetRequiredService<IUserRepository>();
             var bizRepo = sp.GetRequiredService<IBusinessRepository>();
             var userBizRepo = sp.GetRequiredService<IUserBusinessRepository>();
-            var jwtSecret = configuration["Jwt:Secret"] ?? "DEV-ONLY-SECRET-KEY-CHANGE-IN-PRODUCTION-Min32Chars!!";
+            var jwtSecret = configuration["Jwt:Secret"];
+            if (string.IsNullOrWhiteSpace(jwtSecret))
+            {
+                var envName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+                if (!string.Equals(envName, "Development", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Jwt:Secret must be configured in production (env var Jwt__Secret).");
+                jwtSecret = "DEV-ONLY-SECRET-KEY-CHANGE-IN-PRODUCTION-Min32Chars!!";
+            }
             return new AuthService(userRepo, bizRepo, userBizRepo, jwtSecret);
         });
 
