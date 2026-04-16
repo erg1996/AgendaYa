@@ -81,16 +81,17 @@ public class AppointmentRepository : IAppointmentRepository
         var weekActive = await activeQ.CountAsync(a => a.AppointmentDate >= weekStart && a.AppointmentDate < weekEnd);
         var monthActive = await activeQ.CountAsync(a => a.AppointmentDate >= monthStart && a.AppointmentDate < monthEnd);
 
-        // Revenue joins Services so it runs in SQL, not memory.
-        var monthRevenue = await (
+        // Pull prices to memory first — SQLite EF provider can't translate Sum on decimal.
+        var monthPrices = await (
             from a in _context.Appointments
             join s in _context.Services on a.ServiceId equals s.Id
             where a.BusinessId == businessId
                 && a.Status == AppointmentStatus.Completed
                 && a.AppointmentDate >= monthStart
                 && a.AppointmentDate < monthEnd
-            select (decimal?)s.Price ?? 0m
-        ).SumAsync();
+            select s.Price
+        ).ToListAsync();
+        var monthRevenue = monthPrices.Sum(p => p ?? 0m);
 
         var topService = await activeQ
             .GroupBy(a => a.ServiceId)

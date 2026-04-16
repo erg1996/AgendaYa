@@ -6,9 +6,9 @@ import {
   getAvailability,
   createAppointment,
 } from '../api/client'
-import { ClockIcon, CalendarIcon, AgendaYaLogo } from '../components/Icons'
+import { ClockIcon, AgendaYaLogo } from '../components/Icons'
 
-// Derive a readable text color (white or near-black) from any hex brand color
+// ── Color helpers ────────────────────────────────────────────────────────────
 function textOnColor(hex) {
   if (!hex) return '#ffffff'
   const c = hex.replace('#', '')
@@ -38,6 +38,127 @@ const fmtDateLong = (iso) =>
   new Date(iso).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })
 
 const STEP_LABELS = ['Servicio', 'Horario', 'Datos']
+const DAY_NAMES = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do']
+const MONTH_NAMES = [
+  'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'
+]
+
+// ── Mini Calendar ────────────────────────────────────────────────────────────
+function MiniCalendar({ value, onChange, brand, onBrand }) {
+  const todayStr = new Date().toISOString().split('T')[0]
+  const todayDate = new Date(todayStr + 'T00:00:00')
+
+  const [cursor, setCursor] = useState(() => {
+    const d = value ? new Date(value + 'T00:00:00') : new Date()
+    return new Date(d.getFullYear(), d.getMonth(), 1)
+  })
+
+  const year = cursor.getFullYear()
+  const month = cursor.getMonth()
+
+  // Build grid: Mon-based week, 6 rows max
+  const firstDay = new Date(year, month, 1)
+  // getDay(): 0=Sun..6=Sat → convert to Mon-based: 0=Mon..6=Sun
+  const startOffset = (firstDay.getDay() + 6) % 7
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+
+  const cells = []
+  // leading empties
+  for (let i = 0; i < startOffset; i++) cells.push(null)
+  // actual days
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  // trailing empties to complete last row
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const prevMonth = () => setCursor(new Date(year, month - 1, 1))
+  const nextMonth = () => setCursor(new Date(year, month + 1, 1))
+
+  const selectDay = (d) => {
+    if (!d) return
+    const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+    if (dateStr < todayStr) return
+    onChange(dateStr)
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2" style={{ background: brand }}>
+        <button
+          onClick={prevMonth}
+          className="w-6 h-6 rounded-full flex items-center justify-center transition-all hover:bg-black/10"
+          style={{ color: onBrand }}
+          aria-label="Mes anterior"
+        >
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5}>
+            <path d="m15 18-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <span className="font-semibold text-xs capitalize" style={{ color: onBrand }}>
+          {MONTH_NAMES[month]} {year}
+        </span>
+        <button
+          onClick={nextMonth}
+          className="w-6 h-6 rounded-full flex items-center justify-center transition-all hover:bg-black/10"
+          style={{ color: onBrand }}
+          aria-label="Mes siguiente"
+        >
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5}>
+            <path d="m9 18 6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Day names */}
+      <div className="grid grid-cols-7 border-b border-gray-100">
+        {DAY_NAMES.map((n) => (
+          <div key={n} className="text-center py-1.5 text-[10px] font-medium text-gray-400">
+            {n}
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 p-1.5 gap-0.5">
+        {cells.map((d, i) => {
+          if (!d) return <div key={`e-${i}`} />
+
+          const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+          const isPast = dateStr < todayStr
+          const isToday = dateStr === todayStr
+          const isSelected = dateStr === value
+
+          let cellStyle = {}
+          let cellClass = 'w-full aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-all select-none '
+
+          if (isSelected) {
+            cellStyle = { background: brand, color: onBrand }
+          } else if (isPast) {
+            cellClass += 'text-gray-300 cursor-default'
+          } else if (isToday) {
+            cellStyle = { color: brand, boxShadow: `inset 0 0 0 1.5px ${brand}` }
+            cellClass += 'cursor-pointer'
+          } else {
+            cellClass += 'text-gray-700 cursor-pointer hover:bg-gray-100'
+          }
+
+          return (
+            <button
+              key={dateStr}
+              disabled={isPast}
+              onClick={() => selectDay(d)}
+              className={cellClass}
+              style={cellStyle}
+            >
+              {d}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export default function PublicBooking() {
   const { slug } = useParams()
@@ -89,7 +210,7 @@ export default function PublicBooking() {
     setDate('')
   }
 
-  const fetchSlots = async (d) => {
+  const handleDateChange = async (d) => {
     setDate(d)
     if (!d || !selectedService) return
     setLoadingSlots(true)
@@ -148,8 +269,6 @@ export default function PublicBooking() {
     }
   }
 
-  const today = new Date().toISOString().split('T')[0]
-
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -186,7 +305,6 @@ export default function PublicBooking() {
 
       {/* ── Hero header ────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden" style={{ background: brand }}>
-        {/* subtle pattern overlay */}
         <div
           className="absolute inset-0 opacity-10"
           style={{
@@ -236,7 +354,7 @@ export default function PublicBooking() {
       </div>
 
       {/* ── Step progress ────────────────────────────────────────────────── */}
-      <div className="max-w-lg mx-auto w-full px-4 -mt-1 mb-6">
+      <div className="max-w-lg mx-auto w-full px-4 pt-4 mb-6">
         <div className="flex items-center">
           {STEP_LABELS.map((label, idx) => {
             const n = idx + 1
@@ -359,19 +477,12 @@ export default function PublicBooking() {
               <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">
                 ¿Qué día?
               </p>
-              <div className="relative">
-                <CalendarIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                <input
-                  type="date"
-                  value={date}
-                  min={today}
-                  onChange={(e) => fetchSlots(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 transition-all"
-                  style={{ '--tw-ring-color': brand }}
-                  onFocus={e => e.target.style.borderColor = brand}
-                  onBlur={e => e.target.style.borderColor = '#e5e7eb'}
-                />
-              </div>
+              <MiniCalendar
+                value={date}
+                onChange={handleDateChange}
+                brand={brand}
+                onBrand={onBrand}
+              />
             </div>
 
             {loadingSlots && (
