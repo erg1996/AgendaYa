@@ -26,19 +26,16 @@ public class AdminRepository : IAdminRepository
         var completed = await apptQ.CountAsync(a => a.Status == AppointmentStatus.Completed);
         var cancelled = await apptQ.CountAsync(a => a.Status == AppointmentStatus.Cancelled);
 
-        var totalRevenue = await (
+        // SQLite EF provider can't Sum decimal columns — pull prices to memory
+        var completedPrices = await (
             from a in _db.Appointments.IgnoreQueryFilters()
             join s in _db.Services.IgnoreQueryFilters() on a.ServiceId equals s.Id
             where a.Status == AppointmentStatus.Completed
-            select (decimal?)s.Price ?? 0m
-        ).SumAsync();
+            select new { Price = s.Price ?? 0m, a.AppointmentDate }
+        ).ToListAsync();
 
-        var revenue30d = await (
-            from a in _db.Appointments.IgnoreQueryFilters()
-            join s in _db.Services.IgnoreQueryFilters() on a.ServiceId equals s.Id
-            where a.Status == AppointmentStatus.Completed && a.AppointmentDate >= d30
-            select (decimal?)s.Price ?? 0m
-        ).SumAsync();
+        var totalRevenue = completedPrices.Sum(x => x.Price);
+        var revenue30d = completedPrices.Where(x => x.AppointmentDate >= d30).Sum(x => x.Price);
 
         var newBiz7d = await _db.Businesses.CountAsync(b => b.CreatedAt >= d7);
         var newBiz30d = await _db.Businesses.CountAsync(b => b.CreatedAt >= d30);
@@ -72,25 +69,30 @@ public class AdminRepository : IAdminRepository
                 Cancelled = _db.Appointments.Count(a => a.BusinessId == b.Id && a.Status == AppointmentStatus.Cancelled),
                 Last7d = _db.Appointments.Count(a => a.BusinessId == b.Id && a.CreatedAt >= d7),
                 Last30d = _db.Appointments.Count(a => a.BusinessId == b.Id && a.CreatedAt >= d30),
-                Revenue30d = (decimal?)(
-                    from a in _db.Appointments.IgnoreQueryFilters()
-                    join s in _db.Services.IgnoreQueryFilters() on a.ServiceId equals s.Id
-                    where a.BusinessId == b.Id
-                        && a.Status == AppointmentStatus.Completed
-                        && a.AppointmentDate >= d30
-                    select (decimal?)s.Price ?? 0m
-                ).Sum() ?? 0m,
                 LastAppointmentAt = (DateTime?)_db.Appointments
                     .Where(a => a.BusinessId == b.Id)
                     .Max(a => (DateTime?)a.AppointmentDate)
             })
             .ToListAsync();
 
+        // SQLite EF provider can't Sum decimal — pull to memory and sum there
+        var rev30dRows = await (
+            from a in _db.Appointments.IgnoreQueryFilters()
+            join s in _db.Services.IgnoreQueryFilters() on a.ServiceId equals s.Id
+            where a.Status == AppointmentStatus.Completed && a.AppointmentDate >= d30
+            select new { a.BusinessId, Price = s.Price ?? 0m }
+        ).ToListAsync();
+
+        var revenue30dByBiz = rev30dRows
+            .GroupBy(x => x.BusinessId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Price));
+
         return businesses.Select(b => new AdminBusinessRowDto(
             b.Id, b.Name, b.Slug, b.CreatedAt,
             b.UserCount, b.TotalAppointments,
             b.Active, b.Completed, b.Cancelled,
-            b.Last7d, b.Last30d, b.Revenue30d,
+            b.Last7d, b.Last30d,
+            revenue30dByBiz.GetValueOrDefault(b.Id, 0m),
             b.LastAppointmentAt)).ToList();
     }
 
@@ -112,21 +114,16 @@ public class AdminRepository : IAdminRepository
         var appts30d = await apptQ.CountAsync(a => a.CreatedAt >= d30);
         var lastAt = await apptQ.MaxAsync(a => (DateTime?)a.AppointmentDate);
 
-        var totalRevenue = await (
+        // SQLite EF provider can't Sum decimal — pull to memory
+        var bizCompletedPrices = await (
             from a in _db.Appointments.IgnoreQueryFilters()
             join s in _db.Services.IgnoreQueryFilters() on a.ServiceId equals s.Id
             where a.BusinessId == businessId && a.Status == AppointmentStatus.Completed
-            select (decimal?)s.Price ?? 0m
-        ).SumAsync();
+            select new { Price = s.Price ?? 0m, a.AppointmentDate }
+        ).ToListAsync();
 
-        var revenue30d = await (
-            from a in _db.Appointments.IgnoreQueryFilters()
-            join s in _db.Services.IgnoreQueryFilters() on a.ServiceId equals s.Id
-            where a.BusinessId == businessId
-                && a.Status == AppointmentStatus.Completed
-                && a.AppointmentDate >= d30
-            select (decimal?)s.Price ?? 0m
-        ).SumAsync();
+        var totalRevenue = bizCompletedPrices.Sum(x => x.Price);
+        var revenue30d = bizCompletedPrices.Where(x => x.AppointmentDate >= d30).Sum(x => x.Price);
 
         var serviceCount = await _db.Services.CountAsync(s => s.BusinessId == businessId);
         var blockedCount = await _db.BlockedDates.CountAsync(b => b.BusinessId == businessId);
@@ -148,19 +145,24 @@ public class AdminRepository : IAdminRepository
                 a.Id, a.CustomerName, s.Name, a.AppointmentDate, a.Status.ToString())
         ).Take(20).ToListAsync();
 
-        var topServices = await (
-            from a in _db.Appointments
+        // Load service usage counts in memory to avoid complex EF translation
+        var serviceUsageRaw = await (
+            from a in _db.Appointments.IgnoreQueryFilters()
             join s in _db.Services.IgnoreQueryFilters() on a.ServiceId equals s.Id
             where a.BusinessId == businessId
-            group new { a, s } by new { a.ServiceId, s.Name } into g
-            orderby g.Count() descending
-            select new AdminServiceUsageDto(
+            select new { a.ServiceId, s.Name, a.Status, Price = s.Price ?? 0m }
+        ).ToListAsync();
+
+        var topServices = serviceUsageRaw
+            .GroupBy(x => new { x.ServiceId, x.Name })
+            .OrderByDescending(g => g.Count())
+            .Take(10)
+            .Select(g => new AdminServiceUsageDto(
                 g.Key.ServiceId,
                 g.Key.Name,
                 g.Count(),
-                g.Where(x => x.a.Status == AppointmentStatus.Completed)
-                    .Sum(x => (decimal?)x.s.Price ?? 0m))
-        ).Take(10).ToListAsync();
+                g.Where(x => x.Status == AppointmentStatus.Completed).Sum(x => x.Price)))
+            .ToList();
 
         return new AdminBusinessDetailDto(
             biz.Id, biz.Name, biz.Slug, biz.CreatedAt,
