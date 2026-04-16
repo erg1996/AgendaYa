@@ -130,12 +130,14 @@ public class AuthService
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSecret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim("businessId", user.BusinessId.ToString()),
         };
+        if (user.IsSuperAdmin)
+            claims.Add(new Claim("super_admin", "true"));
 
         var token = new JwtSecurityToken(
             issuer: "AgendaYa",

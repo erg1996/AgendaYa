@@ -71,6 +71,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("SuperAdmin", policy =>
+        policy.RequireClaim("super_admin", "true"));
+});
+
 // Rate limiting
 builder.Services.AddRateLimiter(options =>
 {
@@ -108,6 +114,20 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+
+    // Bootstrap super admin: promote user matching SuperAdmin:Email config
+    var superAdminEmail = builder.Configuration["SuperAdmin:Email"];
+    if (!string.IsNullOrWhiteSpace(superAdminEmail))
+    {
+        var normalized = superAdminEmail.Trim().ToLowerInvariant();
+        var admin = db.Users.FirstOrDefault(u => u.Email == normalized);
+        if (admin != null && !admin.IsSuperAdmin)
+        {
+            admin.IsSuperAdmin = true;
+            db.SaveChanges();
+            Log.Information("Promoted {Email} to super admin", normalized);
+        }
+    }
 }
 
 app.UseSerilogRequestLogging();

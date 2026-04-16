@@ -8,6 +8,7 @@ import {
   ListIcon,
   PencilIcon,
   BellIcon,
+  ShieldIcon,
 } from './Icons'
 
 const links = [
@@ -21,7 +22,7 @@ const links = [
 
 export default function Navbar() {
   const { pathname } = useLocation()
-  const { auth, logout } = useAuth()
+  const { auth, logout, isSuperAdmin } = useAuth()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -56,6 +57,20 @@ export default function Navbar() {
                 </Link>
               )
             })}
+            {isSuperAdmin && (
+              <Link
+                to="/admin"
+                title="Super Admin"
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                  pathname.startsWith('/admin')
+                    ? 'bg-rose-50 text-rose-700'
+                    : 'text-rose-600 hover:bg-rose-50'
+                }`}
+              >
+                <ShieldIcon className="w-4 h-4" />
+                <span className="hidden md:inline">Admin</span>
+              </Link>
+            )}
             {auth && (
               <div className="flex items-center gap-2 sm:gap-3 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-200">
                 <span className="text-xs text-gray-500 hidden sm:block truncate max-w-xs">{auth.fullName}</span>

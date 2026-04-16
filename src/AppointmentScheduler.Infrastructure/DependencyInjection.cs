@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IBlockedDateRepository, BlockedDateRepository>();
         services.AddScoped<IUserBusinessRepository, UserBusinessRepository>();
+        services.AddScoped<IAdminRepository, AdminRepository>();
 
         // Application services
         services.AddScoped<BusinessService>();
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddSingleton(actionOptions);
         services.AddScoped<AppointmentService>();
         services.AddScoped<AnalyticsService>();
+        services.AddScoped<AdminService>();
         services.AddScoped<BlockedDateService>();
         services.AddScoped<IEmailService, SmtpEmailService>();
         services.AddScoped<AuthService>(sp =>
