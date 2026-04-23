@@ -7,6 +7,7 @@ import {
   createAppointment,
 } from '../api/client'
 import { ClockIcon, AgendaYaLogo } from '../components/Icons'
+import LocationMap from '../components/LocationMap'
 
 // ── Color helpers ────────────────────────────────────────────────────────────
 function textOnColor(hex) {
@@ -685,6 +686,34 @@ export default function PublicBooking() {
           </div>
         )}
       </div>
+
+      {/* ── Ubicación ──────────────────────────────────────────────────────── */}
+      {business?.latitude && business?.longitude && (
+        <div className="mx-4 mb-4 rounded-2xl border border-gray-100 overflow-hidden bg-white shadow-sm">
+          <div className="px-4 pt-4 pb-3">
+            <h3 className="font-semibold text-gray-800 text-sm mb-1">¿Cómo llegar?</h3>
+            {business.address && (
+              <p className="text-xs text-gray-500 mb-3">{business.address}</p>
+            )}
+          </div>
+          <LocationMap lat={business.latitude} lng={business.longitude} brand={business.brandColor} />
+          <div className="px-4 py-3">
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${business.latitude},${business.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ background: brand, color: onBrand }}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="9" r="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Cómo llegar
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <div className="py-5 text-center">

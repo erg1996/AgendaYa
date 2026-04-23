@@ -85,6 +85,18 @@ public class BusinessService
             business.LogoUrl = string.IsNullOrWhiteSpace(request.LogoUrl) ? null : request.LogoUrl.Trim();
         if (request.WhatsAppReminderTemplate != null)
             business.WhatsAppReminderTemplate = string.IsNullOrWhiteSpace(request.WhatsAppReminderTemplate) ? null : request.WhatsAppReminderTemplate.Trim();
+        if (request.ClearLocation)
+        {
+            business.Latitude = null;
+            business.Longitude = null;
+            business.Address = null;
+        }
+        else if (request.Latitude.HasValue && request.Longitude.HasValue)
+        {
+            business.Latitude = request.Latitude;
+            business.Longitude = request.Longitude;
+            business.Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
+        }
 
         await _repository.SaveChangesAsync();
 
@@ -99,7 +111,7 @@ public class BusinessService
     }
 
     private static BusinessResponse ToResponse(Business b) =>
-        new(b.Id, b.Name, b.Slug, b.LogoUrl, b.BrandColor, b.WhatsAppReminderTemplate, b.CreatedAt);
+        new(b.Id, b.Name, b.Slug, b.LogoUrl, b.BrandColor, b.WhatsAppReminderTemplate, b.CreatedAt, b.Address, b.Latitude, b.Longitude);
 
     public static string GenerateSlug(string name)
     {

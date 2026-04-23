@@ -77,6 +77,12 @@ export const updateBusiness = (id, data) =>
 export const updateBusinessWhatsAppTemplate = (id, whatsAppReminderTemplate) =>
   authRequest(`/api/business/${id}`, { method: 'PUT', body: JSON.stringify({ whatsAppReminderTemplate }) })
 
+export const updateBusinessLocation = (id, { latitude, longitude, address }) =>
+  authRequest(`/api/business/${id}`, { method: 'PUT', body: JSON.stringify({ latitude, longitude, address }) })
+
+export const clearBusinessLocation = (id) =>
+  authRequest(`/api/business/${id}`, { method: 'PUT', body: JSON.stringify({ clearLocation: true }) })
+
 // ─── Services ────────────────────────────────────────────────────────────────
 export const getServices = (businessId) =>
   publicRequest(`/api/services?businessId=${businessId}`)

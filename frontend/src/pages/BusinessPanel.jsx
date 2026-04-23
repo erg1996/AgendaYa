@@ -14,8 +14,11 @@ import {
   getAllBusinesses,
   updateBusiness,
   updateBusinessWhatsAppTemplate,
+  updateBusinessLocation,
+  clearBusinessLocation,
   uploadLogo,
 } from '../api/client'
+import LocationPicker from '../components/LocationPicker'
 
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
@@ -38,6 +41,7 @@ export default function BusinessPanel() {
     { key: 'hours', label: 'Horarios' },
     { key: 'blocked', label: 'Dias Bloqueados' },
     { key: 'whatsapp', label: 'WhatsApp' },
+    { key: 'location', label: 'Ubicación' },
   ]
 
   return (
@@ -82,6 +86,7 @@ export default function BusinessPanel() {
       {tab === 'hours' && <WorkingHoursTab businessId={business.id} />}
       {tab === 'blocked' && <BlockedDatesTab businessId={business.id} />}
       {tab === 'whatsapp' && <WhatsAppTab business={business} />}
+      {tab === 'location' && <LocationTab business={business} />}
     </div>
   )
 }
@@ -765,6 +770,100 @@ function WhatsAppTab({ business }) {
             {previewText}
           </div>
           <p className="text-right text-[10px] text-gray-400 mt-1">10:00 AM ✓✓</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LocationTab({ business }) {
+  const { setBusiness } = useBusiness()
+  const [pending, setPending] = useState(null) // { lat, lng, address }
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState({ type: '', text: '' })
+  const hasLocation = business.latitude != null && business.longitude != null
+
+  const handleChange = (lat, lng, address) => {
+    setPending({ lat, lng, address })
+    setMsg({ type: '', text: '' })
+  }
+
+  const handleSave = async () => {
+    if (!pending) return
+    setSaving(true)
+    setMsg({ type: '', text: '' })
+    try {
+      const updated = await updateBusinessLocation(business.id, {
+        latitude: pending.lat,
+        longitude: pending.lng,
+        address: pending.address,
+      })
+      setBusiness(updated)
+      setPending(null)
+      setMsg({ type: 'success', text: 'Ubicación guardada' })
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleClear = async () => {
+    setSaving(true)
+    setMsg({ type: '', text: '' })
+    try {
+      const updated = await clearBusinessLocation(business.id)
+      setBusiness(updated)
+      setPending(null)
+      setMsg({ type: 'success', text: 'Ubicación eliminada' })
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <div className="flex items-start justify-between mb-1">
+          <h2 className="font-semibold text-gray-800">Ubicación del negocio</h2>
+          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">Opcional</span>
+        </div>
+        <p className="text-sm text-gray-500 mb-4">
+          Tus clientes verán un mapa y un botón "Cómo llegar" en la página de reservas.
+        </p>
+
+        <LocationPicker
+          initialLat={business.latitude}
+          initialLng={business.longitude}
+          initialAddress={business.address}
+          onChange={handleChange}
+        />
+
+        {msg.text && (
+          <p className={`text-sm mt-3 ${msg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+            {msg.text}
+          </p>
+        )}
+
+        <div className="flex gap-3 mt-4">
+          <button
+            onClick={handleSave}
+            disabled={saving || !pending}
+            className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Guardando...' : 'Guardar ubicación'}
+          </button>
+          {hasLocation && (
+            <button
+              onClick={handleClear}
+              disabled={saving}
+              className="text-sm text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
+            >
+              Quitar ubicación
+            </button>
+          )}
         </div>
       </div>
     </div>

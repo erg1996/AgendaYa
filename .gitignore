@@ -5,6 +5,8 @@ obj/
 *.db-wal
 *.user
 .vs/
+.env
+appsettings.Development.json
 
 # Frontend
 frontend/node_modules/
