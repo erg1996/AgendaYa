@@ -1,7 +1,13 @@
 import express from 'express';
 import { config } from './config.js';
 import { logger } from './logger.js';
-import { requireInternalSecret } from './auth.js';
+import { requireInternalSecret, validateBusinessId } from './auth.js';
+import {
+  startSession,
+  getStatus,
+  getQr,
+  disconnectSession,
+} from './sessions.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -13,6 +19,44 @@ app.get('/health', (_req, res) => {
 
 app.get('/ping', requireInternalSecret, (_req, res) => {
   res.json({ pong: true });
+});
+
+app.post('/sessions/:businessId/start', requireInternalSecret, validateBusinessId, async (req, res, next) => {
+  try {
+    const result = await startSession(req.params.businessId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/sessions/:businessId/status', requireInternalSecret, validateBusinessId, (req, res, next) => {
+  try {
+    res.json(getStatus(req.params.businessId));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/sessions/:businessId/qr', requireInternalSecret, validateBusinessId, (req, res, next) => {
+  try {
+    const png = getQr(req.params.businessId);
+    if (!png) return res.status(404).json({ error: 'no_qr_available' });
+    res.set('content-type', 'image/png');
+    res.set('cache-control', 'no-store');
+    res.send(png);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete('/sessions/:businessId', requireInternalSecret, validateBusinessId, async (req, res, next) => {
+  try {
+    await disconnectSession(req.params.businessId);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.use((err, _req, res, _next) => {

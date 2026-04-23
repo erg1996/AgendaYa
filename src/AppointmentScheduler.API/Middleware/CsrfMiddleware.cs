@@ -55,7 +55,8 @@ public class CsrfMiddleware
 
     private static bool IsCsrfExempt(string path) =>
         path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) ||
-        path.Equals("/api/auth/register", StringComparison.OrdinalIgnoreCase);
+        path.Equals("/api/auth/register", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/api/internal/", StringComparison.OrdinalIgnoreCase);
 
     private static string GenerateToken()
     {

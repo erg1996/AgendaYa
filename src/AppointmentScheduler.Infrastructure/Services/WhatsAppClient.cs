@@ -1,5 +1,9 @@
+using System.Net;
+using System.Net.Http.Json;
+using AppointmentScheduler.Application.DTOs;
 using AppointmentScheduler.Application.Interfaces;
 using AppointmentScheduler.Application.Services;
+using AppointmentScheduler.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -41,4 +45,90 @@ public class WhatsAppClient : IWhatsAppClient
             return false;
         }
     }
+
+    public async Task<StartSessionResult?> StartSessionAsync(Guid businessId, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.PostAsync($"sessions/{businessId}/start", content: null, ct);
+            if (!res.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("WhatsApp start session returned {Status} for {BusinessId}", res.StatusCode, businessId);
+                return null;
+            }
+            var payload = await res.Content.ReadFromJsonAsync<StartSessionResponse>(cancellationToken: ct);
+            if (payload is null) return null;
+            return new StartSessionResult(ParseStatus(payload.status), payload.lastError);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WhatsApp start session failed for {BusinessId}", businessId);
+            return null;
+        }
+    }
+
+    public async Task<WhatsAppSessionStatusDto?> GetRemoteStatusAsync(Guid businessId, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.GetAsync($"sessions/{businessId}/status", ct);
+            if (res.StatusCode == HttpStatusCode.NotFound) return null;
+            if (!res.IsSuccessStatusCode) return null;
+            var payload = await res.Content.ReadFromJsonAsync<StatusResponse>(cancellationToken: ct);
+            if (payload is null) return null;
+            return new WhatsAppSessionStatusDto(
+                ParseStatus(payload.status),
+                payload.phoneNumber,
+                payload.lastConnectedAt,
+                payload.lastQrGeneratedAt,
+                payload.lastError,
+                AutoRemindersEnabled: false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WhatsApp get status failed for {BusinessId}", businessId);
+            return null;
+        }
+    }
+
+    public async Task<byte[]?> GetQrAsync(Guid businessId, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.GetAsync($"sessions/{businessId}/qr", ct);
+            if (!res.IsSuccessStatusCode) return null;
+            return await res.Content.ReadAsByteArrayAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WhatsApp get QR failed for {BusinessId}", businessId);
+            return null;
+        }
+    }
+
+    public async Task<bool> DisconnectAsync(Guid businessId, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.DeleteAsync($"sessions/{businessId}", ct);
+            return res.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WhatsApp disconnect failed for {BusinessId}", businessId);
+            return false;
+        }
+    }
+
+    private static WhatsAppSessionStatus ParseStatus(string? raw) => raw?.ToLowerInvariant() switch
+    {
+        "starting" => WhatsAppSessionStatus.Starting,
+        "waiting_qr" => WhatsAppSessionStatus.WaitingQr,
+        "connected" => WhatsAppSessionStatus.Connected,
+        "failed" => WhatsAppSessionStatus.Failed,
+        _ => WhatsAppSessionStatus.Disconnected
+    };
+
+    private record StartSessionResponse(string? status, string? lastError);
+    private record StatusResponse(string? status, string? phoneNumber, DateTime? lastConnectedAt, DateTime? lastQrGeneratedAt, string? lastError);
 }

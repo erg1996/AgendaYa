@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<UserBusiness> UserBusinesses => Set<UserBusiness>();
     public DbSet<WhatsAppMessageTemplate> WhatsAppMessageTemplates => Set<WhatsAppMessageTemplate>();
+    public DbSet<WhatsAppSession> WhatsAppSessions => Set<WhatsAppSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -121,6 +122,20 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Body).IsRequired();
+            entity.HasOne(e => e.Business)
+                .WithMany()
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WhatsAppSession>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).HasConversion<int>().HasDefaultValue(WhatsAppSessionStatus.Disconnected);
+            entity.Property(e => e.PhoneNumber).HasMaxLength(30);
+            entity.Property(e => e.LastError).HasMaxLength(500);
+            entity.Property(e => e.AutoRemindersEnabled).HasDefaultValue(false);
+            entity.HasIndex(e => e.BusinessId).IsUnique();
             entity.HasOne(e => e.Business)
                 .WithMany()
                 .HasForeignKey(e => e.BusinessId)

@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<IBlockedDateRepository, BlockedDateRepository>();
         services.AddScoped<IUserBusinessRepository, UserBusinessRepository>();
         services.AddScoped<IAdminRepository, AdminRepository>();
+        services.AddScoped<IWhatsAppSessionRepository, WhatsAppSessionRepository>();
 
         // Application services
         services.AddScoped<BusinessService>();
