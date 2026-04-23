@@ -192,6 +192,42 @@ export const getAdminBusinesses = () => authRequest('/api/admin/businesses')
 export const getAdminBusinessDetail = (id) => authRequest(`/api/admin/businesses/${id}`)
 export const getAdminActivity = (limit = 50) => authRequest(`/api/admin/activity?limit=${limit}`)
 
+// ─── WhatsApp Session (Phase 2 auto-reminders) ───────────────────────────────
+export const pingWhatsAppService = async () => {
+  // Returns null if feature flag is off (404), true/false depending on node reachability
+  const token = getToken()
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(`${BASE_URL}/api/whatsapp-session/ping`, { headers })
+  if (res.status === 404) return null
+  if (!res.ok) return { serviceReachable: false }
+  return res.json()
+}
+
+export const getWhatsAppSession = () => authRequest('/api/whatsapp-session')
+
+export const startWhatsAppSession = () =>
+  authRequest('/api/whatsapp-session/start', { method: 'POST' })
+
+export const disconnectWhatsAppSession = () =>
+  authRequest('/api/whatsapp-session', { method: 'DELETE' })
+
+export const updateWhatsAppSessionSettings = (autoRemindersEnabled) =>
+  authRequest('/api/whatsapp-session', {
+    method: 'PATCH',
+    body: JSON.stringify({ autoRemindersEnabled }),
+  })
+
+export const getWhatsAppQrBlobUrl = async () => {
+  const token = getToken()
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(`${BASE_URL}/api/whatsapp-session/qr`, { headers, cache: 'no-store' })
+  if (!res.ok) return null
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
+
 // ─── Upload ───────────────────────────────────────────────────────────────────
 export const uploadLogo = async (file) => {
   const token = getToken()

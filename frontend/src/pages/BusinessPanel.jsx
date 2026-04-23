@@ -17,6 +17,12 @@ import {
   updateBusinessLocation,
   clearBusinessLocation,
   uploadLogo,
+  pingWhatsAppService,
+  getWhatsAppSession,
+  startWhatsAppSession,
+  disconnectWhatsAppSession,
+  updateWhatsAppSessionSettings,
+  getWhatsAppQrBlobUrl,
 } from '../api/client'
 import LocationPicker from '../components/LocationPicker'
 
@@ -26,6 +32,14 @@ export default function BusinessPanel() {
   const { business, setBusiness, services, refreshServices } = useBusiness()
   const [tab, setTab] = useState('info')
   const [showSwitcher, setShowSwitcher] = useState(false)
+  const [autoWhatsAppEnabled, setAutoWhatsAppEnabled] = useState(false)
+
+  useEffect(() => {
+    // Probe: show Automatización tab only if backend feature flag is on
+    pingWhatsAppService()
+      .then((res) => setAutoWhatsAppEnabled(res !== null))
+      .catch(() => setAutoWhatsAppEnabled(false))
+  }, [])
 
   if (!business) {
     return <BusinessSelector onSelected={setBusiness} />
@@ -41,6 +55,7 @@ export default function BusinessPanel() {
     { key: 'hours', label: 'Horarios' },
     { key: 'blocked', label: 'Dias Bloqueados' },
     { key: 'whatsapp', label: 'WhatsApp' },
+    ...(autoWhatsAppEnabled ? [{ key: 'whatsappAuto', label: 'Automatización WA' }] : []),
     { key: 'location', label: 'Ubicación' },
   ]
 
@@ -86,6 +101,7 @@ export default function BusinessPanel() {
       {tab === 'hours' && <WorkingHoursTab businessId={business.id} />}
       {tab === 'blocked' && <BlockedDatesTab businessId={business.id} />}
       {tab === 'whatsapp' && <WhatsAppTab business={business} />}
+      {tab === 'whatsappAuto' && <WhatsAppAutoTab />}
       {tab === 'location' && <LocationTab business={business} />}
     </div>
   )
@@ -868,6 +884,263 @@ function LocationTab({ business }) {
       </div>
     </div>
   )
+}
+
+// Status ints come from WhatsAppSessionStatus enum on backend
+const WA_STATUS = {
+  Disconnected: 0,
+  Starting: 1,
+  WaitingQr: 2,
+  Connected: 3,
+  Failed: 4,
+}
+
+function WhatsAppAutoTab() {
+  const [session, setSession] = useState(null)
+  const [qrUrl, setQrUrl] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [working, setWorking] = useState(false)
+  const [msg, setMsg] = useState({ type: '', text: '' })
+  const [countdown, setCountdown] = useState(null)
+
+  const loadSession = async () => {
+    try {
+      const data = await getWhatsAppSession()
+      setSession(data)
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadSession() }, [])
+
+  // Poll every 2s while transient
+  useEffect(() => {
+    if (!session) return
+    if (session.status !== WA_STATUS.Starting && session.status !== WA_STATUS.WaitingQr) return
+    const id = setInterval(loadSession, 2000)
+    return () => clearInterval(id)
+  }, [session?.status])
+
+  // Refresh QR blob when entering WaitingQr or when lastQrGeneratedAt changes
+  useEffect(() => {
+    let revoked = null
+    if (session?.status === WA_STATUS.WaitingQr) {
+      getWhatsAppQrBlobUrl().then((url) => {
+        if (!url) return
+        setQrUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev)
+          return url
+        })
+        revoked = url
+      })
+    } else {
+      setQrUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+    }
+    return () => { if (revoked) URL.revokeObjectURL(revoked) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.status, session?.lastQrGeneratedAt])
+
+  // 90s countdown from lastQrGeneratedAt
+  useEffect(() => {
+    if (session?.status !== WA_STATUS.WaitingQr || !session.lastQrGeneratedAt) {
+      setCountdown(null)
+      return
+    }
+    const expiresAt = new Date(session.lastQrGeneratedAt).getTime() + 90_000
+    const tick = () => setCountdown(Math.max(0, Math.round((expiresAt - Date.now()) / 1000)))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [session?.lastQrGeneratedAt, session?.status])
+
+  const handleStart = async () => {
+    setWorking(true)
+    setMsg({ type: '', text: '' })
+    try {
+      const data = await startWhatsAppSession()
+      setSession(data)
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    if (!confirm('Esto cerrará la sesión de WhatsApp. Tendrás que volver a escanear el QR para reconectar. ¿Continuar?')) return
+    setWorking(true)
+    setMsg({ type: '', text: '' })
+    try {
+      await disconnectWhatsAppSession()
+      setSession({ status: WA_STATUS.Disconnected, autoRemindersEnabled: false, phoneNumber: null, lastConnectedAt: null, lastQrGeneratedAt: null, lastError: null })
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const handleToggleAuto = async (next) => {
+    setWorking(true)
+    setMsg({ type: '', text: '' })
+    try {
+      const data = await updateWhatsAppSessionSettings(next)
+      setSession(data)
+      setMsg({ type: 'success', text: next ? 'Recordatorios automáticos activados' : 'Recordatorios automáticos desactivados' })
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  if (loading) {
+    return <p className="text-center text-gray-400 py-12">Cargando estado de WhatsApp...</p>
+  }
+
+  const status = session?.status ?? WA_STATUS.Disconnected
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="font-semibold text-gray-800">Vincular WhatsApp</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Conecta tu número para que AgendaYa envíe recordatorios automáticos.
+            </p>
+          </div>
+          <StatusBadge status={status} />
+        </div>
+
+        {status === WA_STATUS.Disconnected && (
+          <div>
+            <p className="text-sm text-gray-600 mb-4">
+              Al vincular, aceptas que el uso no-oficial de WhatsApp puede resultar en la suspensión de tu número.
+              AgendaYa implementa buenas prácticas (delays, personalización) pero no garantiza inmunidad.
+              Úsalo solo para comunicación legítima con clientes que hayan aceptado recibir mensajes.
+            </p>
+            <button
+              onClick={handleStart}
+              disabled={working}
+              className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {working ? 'Iniciando...' : 'Vincular WhatsApp'}
+            </button>
+          </div>
+        )}
+
+        {status === WA_STATUS.Starting && (
+          <p className="text-sm text-gray-500 py-4">Iniciando sesión, generando código QR...</p>
+        )}
+
+        {status === WA_STATUS.WaitingQr && (
+          <div className="flex flex-col items-center gap-3">
+            {qrUrl ? (
+              <img src={qrUrl} alt="QR de WhatsApp" className="w-64 h-64 border border-gray-200 rounded-lg" />
+            ) : (
+              <div className="w-64 h-64 border border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-400 text-sm">
+                Generando QR...
+              </div>
+            )}
+            <div className="text-center max-w-sm">
+              <p className="text-sm font-medium text-gray-800">Escanea el QR con tu WhatsApp</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Abre WhatsApp en tu celular → Ajustes → Dispositivos vinculados → Vincular dispositivo.
+              </p>
+              {countdown != null && (
+                <p className="text-xs text-gray-400 mt-2">
+                  {countdown > 0 ? `Expira en ${countdown}s` : 'QR expirado, genera uno nuevo'}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleDisconnect}
+              disabled={working}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+
+        {status === WA_STATUS.Connected && (
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+              <p className="text-sm text-green-900">
+                ✓ Conectado{session.phoneNumber ? ` como +${session.phoneNumber}` : ''}
+              </p>
+              {session.lastConnectedAt && (
+                <p className="text-xs text-green-700 mt-1">
+                  Vinculado el {new Date(session.lastConnectedAt).toLocaleString('es')}
+                </p>
+              )}
+            </div>
+
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!session.autoRemindersEnabled}
+                disabled={working}
+                onChange={(e) => handleToggleAuto(e.target.checked)}
+                className="w-4 h-4 text-indigo-600 rounded"
+              />
+              <span className="text-sm text-gray-800">
+                Enviar recordatorios automáticos a clientes con opt-in
+              </span>
+            </label>
+
+            <button
+              onClick={handleDisconnect}
+              disabled={working}
+              className="text-sm text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
+            >
+              {working ? '...' : 'Desvincular WhatsApp'}
+            </button>
+          </div>
+        )}
+
+        {status === WA_STATUS.Failed && (
+          <div className="space-y-3">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+              Error: {session.lastError ?? 'desconocido'}
+            </div>
+            <button
+              onClick={handleStart}
+              disabled={working}
+              className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {working ? 'Reintentando...' : 'Reintentar'}
+            </button>
+          </div>
+        )}
+
+        {msg.text && (
+          <p className={`text-sm mt-3 ${msg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+            {msg.text}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function StatusBadge({ status }) {
+  const map = {
+    [WA_STATUS.Disconnected]: { text: 'Desconectado', cls: 'bg-gray-100 text-gray-600' },
+    [WA_STATUS.Starting]: { text: 'Iniciando', cls: 'bg-blue-100 text-blue-700' },
+    [WA_STATUS.WaitingQr]: { text: 'Esperando QR', cls: 'bg-amber-100 text-amber-700' },
+    [WA_STATUS.Connected]: { text: 'Conectado', cls: 'bg-green-100 text-green-700' },
+    [WA_STATUS.Failed]: { text: 'Error', cls: 'bg-red-100 text-red-700' },
+  }
+  const { text, cls } = map[status] ?? map[WA_STATUS.Disconnected]
+  return <span className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${cls}`}>{text}</span>
 }
 
 function BlockedDatesTab({ businessId }) {
