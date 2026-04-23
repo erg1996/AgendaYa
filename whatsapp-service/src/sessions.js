@@ -236,20 +236,20 @@ export async function sendMessage(businessId, phone, body, appointmentId, firstC
   const limiter = getLimiter(businessId, firstConnectedAt, timeZoneId);
 
   try {
-    await limiter.enqueue({
+    const result = await limiter.enqueue({
       phone,
       appointmentId,
-      sendTyping: async (durationMs) => {
-        try {
-          await s.sock.sendPresenceUpdate('composing', jid);
-        } catch { /* ignore — non-fatal */ }
+      sendTyping: async () => {
+        try { await s.sock.sendPresenceUpdate('composing', jid); } catch { /* non-fatal */ }
       },
       send: async () => {
         await s.sock.sendMessage(jid, { text: body });
       },
     });
+    if (!result.ok) return result;
     return { ok: true };
   } catch (err) {
+    limiter.recordFailure();
     logger.error({ err: err.message, businessId, phone }, 'sendMessage failed');
     return { ok: false, reason: err.message };
   }

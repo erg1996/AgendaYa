@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   getBusinessBySlug,
+  getBusinessWhatsAppActive,
   getServices,
   getAvailability,
   createAppointment,
@@ -187,10 +188,15 @@ export default function PublicBooking() {
 
   const loadBusiness = async () => {
     try {
-      const biz = await getBusinessBySlug(slug)
+      const [biz, waStatus] = await Promise.all([
+        getBusinessBySlug(slug),
+        getBusinessWhatsAppActive(slug),
+      ])
       setBusiness(biz)
       const svcs = await getServices(biz.id)
       setServices(svcs)
+      // Pre-check WhatsApp consent if the business has an active session
+      if (waStatus?.active) setWhatsAppConsent(true)
     } catch {
       setError('Negocio no encontrado')
     } finally {
@@ -656,7 +662,8 @@ export default function PublicBooking() {
                       style={{ accentColor: brand }}
                     />
                     <span className="text-xs text-gray-500">
-                      Acepto recibir un recordatorio de mi cita por WhatsApp.
+                      Acepto recibir un recordatorio de mi cita por WhatsApp.{' '}
+                      <span className="text-gray-400">Puedes darte de baja respondiendo <strong>BAJA</strong> en cualquier momento.</span>
                     </span>
                   </label>
                 )}

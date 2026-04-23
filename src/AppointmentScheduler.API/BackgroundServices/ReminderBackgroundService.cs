@@ -130,7 +130,7 @@ public class ReminderBackgroundService : BackgroundService
                 var body         = WhatsAppTemplateRenderer.Render(
                     a.Business.WhatsAppReminderTemplate,
                     a.CustomerName, a.Business.Name, a.Service.Name,
-                    a.AppointmentDate, confirmUrl, cancelUrl);
+                    a.AppointmentDate, confirmUrl, cancelUrl, a.Id);
 
                 var ok = await waClient!.SendMessageAsync(
                     a.BusinessId, normalizedPhone, body, a.Id.ToString(),

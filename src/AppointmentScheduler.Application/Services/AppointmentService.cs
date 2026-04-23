@@ -153,7 +153,7 @@ public class AppointmentService
             var cancelUrl = BuildActionUrl(a.Id, AppointmentAction.Cancel, tokenExpires);
             var message = WhatsAppTemplateRenderer.Render(
                 template, a.CustomerName, a.Business.Name, a.Service.Name, a.AppointmentDate,
-                confirmUrl, cancelUrl);
+                confirmUrl, cancelUrl, a.Id);
             var url = WhatsAppTemplateRenderer.BuildWaUrl(phone, message);
             return new PendingReminderResponse(a.Id, a.CustomerName, a.CustomerPhone!, a.AppointmentDate, a.Service.Name, a.Business.Name, url, a.WhatsAppReminderSent);
         }).ToList();

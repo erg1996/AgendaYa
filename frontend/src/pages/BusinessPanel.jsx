@@ -1119,6 +1119,20 @@ function WhatsAppAutoTab() {
               )}
             </div>
 
+            {(() => {
+              if (!session.firstConnectedAt) return null
+              const daysSince = Math.floor((Date.now() - new Date(session.firstConnectedAt).getTime()) / 86400000)
+              if (daysSince >= 14) return null
+              const limit = daysSince <= 3 ? 10 : daysSince <= 7 ? 20 : 50
+              const daysLeft = 14 - daysSince
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
+                  <strong>Calentando cuenta</strong> — día {daysSince + 1} de 14. Límite actual: {limit} mensajes/día.
+                  Envío pleno en {daysLeft} día{daysLeft !== 1 ? 's' : ''}.
+                </div>
+              )
+            })()}
+
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"

@@ -36,13 +36,17 @@ export function removeLimiter(businessId) {
   limiters.delete(businessId);
 }
 
+const CONSECUTIVE_FAIL_LIMIT  = 3;
+const CONSECUTIVE_FAIL_WINDOW = 10 * 60_000; // 10 minutes
+const CONSECUTIVE_FAIL_PAUSE  = 60 * 60_000; // 1 hour
+
 class RateLimiter {
   constructor(businessId, firstConnectedAt, timeZoneId) {
-    this.businessId      = businessId;
+    this.businessId       = businessId;
     this.firstConnectedAt = firstConnectedAt ? new Date(firstConnectedAt) : new Date();
-    this.timeZoneId      = timeZoneId || 'UTC';
-    this.queue           = [];
-    this.processing      = false;
+    this.timeZoneId       = timeZoneId || 'UTC';
+    this.queue            = [];
+    this.processing       = false;
 
     // Rolling counters
     this._hourStart = Date.now();
@@ -52,6 +56,10 @@ class RateLimiter {
 
     // phone → timestamp of last send
     this._lastSent = new Map();
+
+    // Consecutive failure tracking (anti-ban pause)
+    this._recentFailures = []; // timestamps of recent send failures
+    this._pausedUntil    = 0;
   }
 
   get _dailyLimit() {
@@ -92,9 +100,28 @@ class RateLimiter {
     });
   }
 
+  recordFailure() {
+    const now = Date.now();
+    this._recentFailures = this._recentFailures.filter(t => now - t < CONSECUTIVE_FAIL_WINDOW);
+    this._recentFailures.push(now);
+    if (this._recentFailures.length >= CONSECUTIVE_FAIL_LIMIT) {
+      this._pausedUntil = now + CONSECUTIVE_FAIL_PAUSE;
+      this._recentFailures = [];
+      logger.warn({ businessId: this.businessId }, 'consecutive failures — pausing queue 1 hour');
+    }
+  }
+
   async _process() {
     this.processing = true;
     while (this.queue.length > 0) {
+      // Consecutive-failure pause
+      if (Date.now() < this._pausedUntil) {
+        const waitMs = this._pausedUntil - Date.now();
+        logger.info({ businessId: this.businessId, waitMs }, 'queue paused (consecutive failures)');
+        await sleep(Math.min(waitMs, 3_600_000));
+        continue;
+      }
+
       const waitWindow = this._msUntilWindowOpens();
       if (waitWindow > 0) {
         logger.info({ businessId: this.businessId, waitMs: waitWindow }, 'outside send window');
@@ -133,8 +160,10 @@ class RateLimiter {
         this._sentHour++;
         this._sentDay++;
         this._lastSent.set(task.phone, Date.now());
+        this._recentFailures = []; // reset on success
         task.resolve({ ok: true });
       } catch (err) {
+        this.recordFailure();
         task.reject(err);
       }
 

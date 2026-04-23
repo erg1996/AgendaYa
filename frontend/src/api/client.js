@@ -68,6 +68,9 @@ export const getBusiness = (id) => authRequest(`/api/business/${id}`)
 
 export const getBusinessBySlug = (slug) => publicRequest(`/api/business/slug/${slug}`)
 
+export const getBusinessWhatsAppActive = (slug) =>
+  publicRequest(`/api/business/slug/${slug}/whatsapp-active`).catch(() => ({ active: false }))
+
 export const createBusiness = (data) =>
   authRequest('/api/business', { method: 'POST', body: JSON.stringify(data) })
 
