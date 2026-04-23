@@ -8,7 +8,8 @@ public record CreateAppointmentRequest(
     [Required, MaxLength(200)] string CustomerName,
     [EmailAddress, MaxLength(200)] string? CustomerEmail,
     [MaxLength(30)] string? CustomerPhone,
-    [Required] DateTime AppointmentDate);
+    [Required] DateTime AppointmentDate,
+    bool WhatsAppOptIn = false);
 
 public record AppointmentResponse(
     Guid Id,

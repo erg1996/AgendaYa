@@ -212,4 +212,62 @@ public class SmtpEmailService : IEmailService
             _logger.LogError(ex, "Failed to send reminder email to {Email}", toEmail);
         }
     }
+
+    public async Task SendWhatsAppSessionDownAsync(
+        string toEmail,
+        string businessName,
+        string? phoneNumber,
+        string estado,
+        CancellationToken ct = default)
+    {
+        var smtpHost = Environment.GetEnvironmentVariable("SMTP_HOST");
+        if (string.IsNullOrEmpty(smtpHost))
+        {
+            _logger.LogWarning("Email not configured. Skipping session-down notification to {Email}", toEmail);
+            return;
+        }
+
+        var smtpPort  = int.Parse(Environment.GetEnvironmentVariable("SMTP_PORT") ?? "587");
+        var fromEmail = Environment.GetEnvironmentVariable("SMTP_FROM") ?? "noreply@agendaya.app";
+        var fromName  = Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "AgendaYa";
+        var username  = Environment.GetEnvironmentVariable("SMTP_USERNAME") ?? "";
+        var password  = Environment.GetEnvironmentVariable("SMTP_PASSWORD") ?? "";
+
+        var phoneStr = string.IsNullOrEmpty(phoneNumber) ? "desconocido" : phoneNumber;
+        var subject  = $"Alerta: Sesión WhatsApp {estado} - {businessName}";
+        var body     = $@"
+<html><body style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;'>
+  <div style='background:#EF4444;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;'>
+    <h1 style='margin:0;font-size:20px;'>Sesión WhatsApp {estado}</h1>
+  </div>
+  <div style='background:#FFF7F7;padding:20px;border:1px solid #FCA5A5;border-top:none;border-radius:0 0 12px 12px;'>
+    <p>La sesión de WhatsApp de <strong>{businessName}</strong> (número: {phoneStr}) está <strong>{estado}</strong>.</p>
+    <p>Los recordatorios automáticos no se enviarán hasta que vuelvas a conectar la sesión desde el panel de administración.</p>
+  </div>
+  <p style='color:#9CA3AF;font-size:12px;text-align:center;margin-top:16px;'>Enviado por AgendaYa</p>
+</body></html>";
+
+        try
+        {
+            using var smtp = new SmtpClient(smtpHost, smtpPort);
+            smtp.EnableSsl = true;
+            if (!string.IsNullOrEmpty(username))
+                smtp.Credentials = new NetworkCredential(username, password);
+
+            var message = new MailMessage
+            {
+                From = new MailAddress(fromEmail, fromName),
+                Subject = subject,
+                Body = body,
+                IsBodyHtml = true
+            };
+            message.To.Add(new MailAddress(toEmail));
+            await smtp.SendMailAsync(message, ct);
+            _logger.LogInformation("Session-down alert sent to {Email}", toEmail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send session-down alert to {Email}", toEmail);
+        }
+    }
 }

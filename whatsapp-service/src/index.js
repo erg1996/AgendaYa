@@ -7,6 +7,8 @@ import {
   getStatus,
   getQr,
   disconnectSession,
+  sendMessage,
+  sendTestMessage,
 } from './sessions.js';
 
 const app = express();
@@ -54,6 +56,32 @@ app.delete('/sessions/:businessId', requireInternalSecret, validateBusinessId, a
   try {
     await disconnectSession(req.params.businessId);
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/sessions/:businessId/send', requireInternalSecret, validateBusinessId, async (req, res, next) => {
+  try {
+    const { to, body, appointmentId, firstConnectedAt, timeZoneId } = req.body ?? {};
+    if (!to || !body) return res.status(400).json({ error: 'to and body required' });
+    const result = await sendMessage(
+      req.params.businessId, to, body, appointmentId, firstConnectedAt, timeZoneId
+    );
+    if (!result.ok) return res.status(409).json(result);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/sessions/:businessId/send-test', requireInternalSecret, validateBusinessId, async (req, res, next) => {
+  try {
+    const { to, body } = req.body ?? {};
+    if (!to || !body) return res.status(400).json({ error: 'to and body required' });
+    const result = await sendTestMessage(req.params.businessId, to, body);
+    if (!result.ok) return res.status(409).json(result);
+    res.json(result);
   } catch (err) {
     next(err);
   }

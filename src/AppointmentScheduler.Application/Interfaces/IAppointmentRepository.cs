@@ -31,5 +31,7 @@ public interface IAppointmentRepository
     Task AddAsync(Appointment appointment);
     Task<bool> TryCreateWithOverlapCheckAsync(Appointment appointment);
     Task<bool> ClaimReminderAsync(Guid appointmentId);
+    Task<bool> ClaimWhatsAppReminderAsync(Guid appointmentId);
+    Task MarkWhatsAppReminderFailedAsync(Guid appointmentId);
     Task SaveChangesAsync();
 }

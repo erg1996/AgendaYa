@@ -120,6 +120,37 @@ public class WhatsAppClient : IWhatsAppClient
         }
     }
 
+    public async Task<bool> SendMessageAsync(Guid businessId, string toPhone, string body, string appointmentId,
+        DateTime? firstConnectedAt = null, string? timeZoneId = null, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = new { to = toPhone, body, appointmentId, firstConnectedAt, timeZoneId };
+            var res = await _http.PostAsJsonAsync($"sessions/{businessId}/send", payload, ct);
+            return res.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WhatsApp send message failed for {BusinessId} to {Phone}", businessId, toPhone);
+            return false;
+        }
+    }
+
+    public async Task<bool> SendTestMessageAsync(Guid businessId, string toPhone, string body, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = new { to = toPhone, body };
+            var res = await _http.PostAsJsonAsync($"sessions/{businessId}/send-test", payload, ct);
+            return res.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WhatsApp send test message failed for {BusinessId}", businessId);
+            return false;
+        }
+    }
+
     private static WhatsAppSessionStatus ParseStatus(string? raw) => raw?.ToLowerInvariant() switch
     {
         "starting" => WhatsAppSessionStatus.Starting,

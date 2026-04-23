@@ -21,4 +21,11 @@ public interface IEmailService
         int durationMinutes,
         string? brandColor = null,
         string? logoUrl = null);
+
+    Task SendWhatsAppSessionDownAsync(
+        string toEmail,
+        string businessName,
+        string? phoneNumber,
+        string estado,
+        CancellationToken ct = default);
 }

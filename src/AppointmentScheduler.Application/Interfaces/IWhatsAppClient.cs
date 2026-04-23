@@ -9,4 +9,7 @@ public interface IWhatsAppClient
     Task<WhatsAppSessionStatusDto?> GetRemoteStatusAsync(Guid businessId, CancellationToken ct = default);
     Task<byte[]?> GetQrAsync(Guid businessId, CancellationToken ct = default);
     Task<bool> DisconnectAsync(Guid businessId, CancellationToken ct = default);
+    Task<bool> SendMessageAsync(Guid businessId, string toPhone, string body, string appointmentId,
+        DateTime? firstConnectedAt = null, string? timeZoneId = null, CancellationToken ct = default);
+    Task<bool> SendTestMessageAsync(Guid businessId, string toPhone, string body, CancellationToken ct = default);
 }

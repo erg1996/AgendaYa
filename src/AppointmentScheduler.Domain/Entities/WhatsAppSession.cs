@@ -10,6 +10,8 @@ public class WhatsAppSession
     public DateTime? LastQrGeneratedAt { get; set; }
     public string? LastError { get; set; }
     public bool AutoRemindersEnabled { get; set; }
+    public DateTime? FirstConnectedAt { get; set; }
+    public string? TimeZoneId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

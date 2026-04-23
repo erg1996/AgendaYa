@@ -8,8 +8,10 @@ public record WhatsAppSessionStatusDto(
     DateTime? LastConnectedAt,
     DateTime? LastQrGeneratedAt,
     string? LastError,
-    bool AutoRemindersEnabled);
+    bool AutoRemindersEnabled,
+    string? TimeZoneId = null);
 
 public record StartSessionResult(WhatsAppSessionStatus Status, string? LastError);
 
-public record UpdateSessionSettingsRequest(bool AutoRemindersEnabled);
+public record UpdateSessionSettingsRequest(bool AutoRemindersEnabled, string? TimeZoneId = null);
+public record SendTestRequest(string? To, string? Body);

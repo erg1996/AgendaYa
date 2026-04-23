@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<UserBusiness> UserBusinesses => Set<UserBusiness>();
     public DbSet<WhatsAppMessageTemplate> WhatsAppMessageTemplates => Set<WhatsAppMessageTemplate>();
     public DbSet<WhatsAppSession> WhatsAppSessions => Set<WhatsAppSession>();
+    public DbSet<WhatsAppBlacklist> WhatsAppBlacklists => Set<WhatsAppBlacklist>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -55,6 +56,8 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Notes).HasMaxLength(1000);
             entity.Property(e => e.ReminderSent).HasDefaultValue(false);
             entity.Property(e => e.WhatsAppReminderSent).HasDefaultValue(false);
+            entity.Property(e => e.WhatsAppReminderFailed).HasDefaultValue(false);
+            entity.Property(e => e.WhatsAppOptIn).HasDefaultValue(false);
             entity.Ignore(e => e.EndTime);
             entity.HasIndex(e => new { e.BusinessId, e.AppointmentDate });
             entity.HasIndex(e => e.ServiceId);
@@ -128,6 +131,17 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<WhatsAppBlacklist>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.NormalizedPhone).IsRequired().HasMaxLength(30);
+            entity.HasIndex(e => new { e.BusinessId, e.NormalizedPhone }).IsUnique();
+            entity.HasOne(e => e.Business)
+                .WithMany()
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<WhatsAppSession>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -135,6 +149,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.PhoneNumber).HasMaxLength(30);
             entity.Property(e => e.LastError).HasMaxLength(500);
             entity.Property(e => e.AutoRemindersEnabled).HasDefaultValue(false);
+            entity.Property(e => e.TimeZoneId).HasMaxLength(100);
             entity.HasIndex(e => e.BusinessId).IsUnique();
             entity.HasOne(e => e.Business)
                 .WithMany()

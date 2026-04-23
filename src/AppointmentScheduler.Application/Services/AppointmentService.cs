@@ -67,6 +67,7 @@ public class AppointmentService
             AppointmentDate = appointmentDate,
             DurationMinutes = service.DurationMinutes,
             Status = AppointmentStatus.Pending,
+            WhatsAppOptIn = request.WhatsAppOptIn && !string.IsNullOrEmpty(request.CustomerPhone),
             CreatedAt = DateTime.UtcNow
         };
 

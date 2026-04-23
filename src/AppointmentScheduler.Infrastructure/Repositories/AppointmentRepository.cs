@@ -161,6 +161,23 @@ public class AppointmentRepository : IAppointmentRepository
         return affected == 1;
     }
 
+    public async Task<bool> ClaimWhatsAppReminderAsync(Guid appointmentId)
+    {
+        var affected = await _context.Appointments
+            .Where(a => a.Id == appointmentId && !a.WhatsAppReminderSent && !a.WhatsAppReminderFailed)
+            .ExecuteUpdateAsync(u => u.SetProperty(a => a.WhatsAppReminderSent, true));
+        return affected == 1;
+    }
+
+    public async Task MarkWhatsAppReminderFailedAsync(Guid appointmentId)
+    {
+        await _context.Appointments
+            .Where(a => a.Id == appointmentId)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(a => a.WhatsAppReminderSent, false)
+                .SetProperty(a => a.WhatsAppReminderFailed, true));
+    }
+
     public async Task SaveChangesAsync() =>
         await _context.SaveChangesAsync();
 }

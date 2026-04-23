@@ -50,7 +50,7 @@ public class WhatsAppSessionController : ControllerBase
         if (session is null)
         {
             return Ok(new WhatsAppSessionStatusDto(
-                WhatsAppSessionStatus.Disconnected, null, null, null, null, AutoRemindersEnabled: false));
+                WhatsAppSessionStatus.Disconnected, null, null, null, null, AutoRemindersEnabled: false, TimeZoneId: null));
         }
         return Ok(ToDto(session));
     }
@@ -135,6 +135,25 @@ public class WhatsAppSessionController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("test")]
+    public async Task<IActionResult> SendTest([FromBody] SendTestRequest request, CancellationToken ct)
+    {
+        if (!_features.WhatsAppAutomation) return NotFound();
+        var ctx = await AuthorizeAsync();
+        if (ctx is null) return Forbid();
+
+        var session = await _sessions.GetByBusinessIdAsync(ctx.BusinessId, ct);
+        if (session is null || session.Status != WhatsAppSessionStatus.Connected)
+            return BadRequest(new { error = "session_not_connected" });
+
+        if (string.IsNullOrWhiteSpace(request.To))
+            return BadRequest(new { error = "to required" });
+
+        var ok = await _whatsapp.SendTestMessageAsync(ctx.BusinessId, request.To.Trim(), request.Body ?? "Hola desde AgendaYa - mensaje de prueba", ct);
+        if (!ok) return StatusCode(502, new { error = "send_failed" });
+        return Ok(new { sent = true });
+    }
+
     [HttpPatch]
     public async Task<IActionResult> UpdateSettings([FromBody] UpdateSessionSettingsRequest request, CancellationToken ct)
     {
@@ -146,13 +165,15 @@ public class WhatsAppSessionController : ControllerBase
         if (session is null) return NotFound();
 
         session.AutoRemindersEnabled = request.AutoRemindersEnabled;
+        if (request.TimeZoneId is not null)
+            session.TimeZoneId = string.IsNullOrWhiteSpace(request.TimeZoneId) ? null : request.TimeZoneId.Trim();
         session.UpdatedAt = DateTime.UtcNow;
         await _sessions.SaveChangesAsync(ct);
         return Ok(ToDto(session));
     }
 
     private static WhatsAppSessionStatusDto ToDto(WhatsAppSession s) => new(
-        s.Status, s.PhoneNumber, s.LastConnectedAt, s.LastQrGeneratedAt, s.LastError, s.AutoRemindersEnabled);
+        s.Status, s.PhoneNumber, s.LastConnectedAt, s.LastQrGeneratedAt, s.LastError, s.AutoRemindersEnabled, s.TimeZoneId);
 
     private async Task<AuthContext?> AuthorizeAsync()
     {

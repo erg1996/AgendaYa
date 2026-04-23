@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IUserBusinessRepository, UserBusinessRepository>();
         services.AddScoped<IAdminRepository, AdminRepository>();
         services.AddScoped<IWhatsAppSessionRepository, WhatsAppSessionRepository>();
+        services.AddScoped<IWhatsAppBlacklistRepository, WhatsAppBlacklistRepository>();
 
         // Application services
         services.AddScoped<BusinessService>();

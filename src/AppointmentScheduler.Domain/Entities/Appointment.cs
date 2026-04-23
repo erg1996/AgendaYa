@@ -22,6 +22,8 @@ public class Appointment
     public string? Notes { get; set; }
     public bool ReminderSent { get; set; }
     public bool WhatsAppReminderSent { get; set; }
+    public bool WhatsAppReminderFailed { get; set; }
+    public bool WhatsAppOptIn { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public DateTime EndTime => AppointmentDate.AddMinutes(DurationMinutes);
