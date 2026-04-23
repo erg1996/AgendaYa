@@ -5,36 +5,44 @@ import { useState } from 'react'
 import { ListIcon, InboxIcon, XIcon } from '../components/Icons'
 
 const STATUS_CONFIG = {
-  Pending: { label: 'Pendiente', bg: 'bg-yellow-50 text-yellow-700', dot: 'bg-yellow-400' },
-  Confirmed: { label: 'Confirmada', bg: 'bg-blue-50 text-blue-700', dot: 'bg-blue-400' },
-  Cancelled: { label: 'Cancelada', bg: 'bg-red-50 text-red-600', dot: 'bg-red-400' },
-  Completed: { label: 'Completada', bg: 'bg-green-50 text-green-700', dot: 'bg-green-400' },
+  Pending:   { label: 'Pendiente',  bg: 'bg-yellow-50 text-yellow-700 border-yellow-200',  dot: 'bg-yellow-400' },
+  Confirmed: { label: 'Confirmada', bg: 'bg-blue-50 text-blue-700 border-blue-200',         dot: 'bg-blue-400' },
+  Cancelled: { label: 'Cancelada',  bg: 'bg-red-50 text-red-600 border-red-200',            dot: 'bg-red-400' },
+  Completed: { label: 'Completada', bg: 'bg-green-50 text-green-700 border-green-200',      dot: 'bg-green-400' },
+}
+
+const STATUS_ACTIONS = {
+  Pending:   [{ label: 'Confirmar', to: 'Confirmed', cls: 'text-blue-600 hover:text-blue-800 border-blue-200 hover:bg-blue-50' },
+              { label: 'Cancelar',  to: 'Cancelled', cls: 'text-red-500 hover:text-red-700 border-red-200 hover:bg-red-50' }],
+  Confirmed: [{ label: 'Completar', to: 'Completed', cls: 'text-green-600 hover:text-green-800 border-green-200 hover:bg-green-50' },
+              { label: 'Cancelar',  to: 'Cancelled', cls: 'text-red-500 hover:text-red-700 border-red-200 hover:bg-red-50' }],
 }
 
 export default function AppointmentsList() {
   const { business, appointments, services, refreshAppointments } = useBusiness()
   const [updating, setUpdating] = useState(null)
   const [filter, setFilter] = useState('all')
-  const [editingNotes, setEditingNotes] = useState(null) // appointment id
+  const [editingNotes, setEditingNotes] = useState(null)
   const [notesValue, setNotesValue] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [downloading, setDownloading] = useState(false)
 
   if (!business) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <ListIcon className="w-14 h-14 text-gray-300 mb-4" />
-        <p className="text-gray-500 mb-4">Primero debes configurar un negocio</p>
-        <Link to="/business" className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+      <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
+        <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
+          <ListIcon className="w-8 h-8 text-gray-400" />
+        </div>
+        <p className="text-gray-500 mb-5">Primero debes configurar un negocio</p>
+        <Link to="/business" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition-all">
           Ir a Mi Negocio
         </Link>
       </div>
     )
   }
 
-  const getServiceName = (serviceId) => services.find((s) => s.id === serviceId)?.name ?? 'Servicio'
-
-  const formatDate = (iso) => new Date(iso).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  const getServiceName = (id) => services.find((s) => s.id === id)?.name ?? 'Servicio'
+  const formatDate = (iso) => new Date(iso).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })
   const formatTime = (iso) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
 
   const handleStatusChange = async (id, newStatus) => {
@@ -78,28 +86,25 @@ export default function AppointmentsList() {
   const statusBadge = (status) => {
     const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.Pending
     return (
-      <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full ${cfg.bg}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+      <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${cfg.bg}`}>
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
         {cfg.label}
       </span>
     )
   }
 
-  const statusActions = (a) => {
-    if (updating === a.id) return <span className="text-xs text-gray-400">...</span>
-    const actions = []
-    if (a.status === 'Pending') {
-      actions.push({ label: 'Confirmar', status: 'Confirmed', cls: 'text-blue-600 hover:text-blue-800' })
-      actions.push({ label: 'Cancelar', status: 'Cancelled', cls: 'text-red-500 hover:text-red-700' })
-    }
-    if (a.status === 'Confirmed') {
-      actions.push({ label: 'Completar', status: 'Completed', cls: 'text-green-600 hover:text-green-800' })
-      actions.push({ label: 'Cancelar', status: 'Cancelled', cls: 'text-red-500 hover:text-red-700' })
-    }
+  const actionButtons = (a) => {
+    if (updating === a.id) return <span className="text-xs text-gray-400 animate-pulse">…</span>
+    const actions = STATUS_ACTIONS[a.status] ?? []
+    if (!actions.length) return null
     return (
-      <div className="flex gap-2">
+      <div className="flex gap-1.5 flex-wrap">
         {actions.map((act) => (
-          <button key={act.status} onClick={() => handleStatusChange(a.id, act.status)} className={`text-xs font-medium ${act.cls}`}>
+          <button
+            key={act.to}
+            onClick={() => handleStatusChange(a.id, act.to)}
+            className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${act.cls}`}
+          >
             {act.label}
           </button>
         ))}
@@ -107,34 +112,43 @@ export default function AppointmentsList() {
     )
   }
 
+  const filters = [
+    { key: 'all', label: 'Todas' },
+    ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ key: k, label: v.label })),
+  ]
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Citas</h1>
-          <p className="text-gray-500 text-sm">{appointments.length} citas registradas</p>
+          <h1 className="text-2xl font-bold text-gray-900">Citas</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{appointments.length} registradas</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={handleDownloadCsv}
             disabled={downloading}
-            className="text-sm bg-white border border-gray-200 text-gray-600 hover:text-indigo-600 hover:border-indigo-300 px-3 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="text-sm bg-white border border-gray-200 text-gray-600 hover:text-indigo-600 hover:border-indigo-300 px-3 py-2 rounded-xl font-medium transition-all disabled:opacity-50"
           >
-            {downloading ? 'Descargando...' : 'Exportar CSV'}
+            {downloading ? 'Descargando…' : 'Exportar CSV'}
           </button>
-          <button onClick={refreshAppointments} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium px-3 py-2">
+          <button
+            onClick={refreshAppointments}
+            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium px-3 py-2 rounded-xl hover:bg-indigo-50 transition-all"
+          >
             Actualizar
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit flex-wrap">
-        {[{ key: 'all', label: 'Todas' }, ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ key: k, label: v.label }))].map((f) => (
+      <div className="flex gap-1.5 bg-gray-100 p-1 rounded-xl overflow-x-auto">
+        {filters.map((f) => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
               filter === f.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -144,42 +158,41 @@ export default function AppointmentsList() {
       </div>
 
       {sorted.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <InboxIcon className="w-14 h-14 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 mb-4">{filter === 'all' ? 'No hay citas registradas' : 'No hay citas con este estado'}</p>
+        <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
+          <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <InboxIcon className="w-7 h-7 text-gray-400" />
+          </div>
+          <p className="text-gray-500">{filter === 'all' ? 'No hay citas registradas' : 'No hay citas con este estado'}</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full hidden sm:table">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left px-5 py-3 text-sm font-medium text-gray-500">Cliente</th>
-                <th className="text-left px-5 py-3 text-sm font-medium text-gray-500">Servicio</th>
-                <th className="text-left px-5 py-3 text-sm font-medium text-gray-500">Fecha</th>
-                <th className="text-left px-5 py-3 text-sm font-medium text-gray-500">Hora</th>
-                <th className="text-left px-5 py-3 text-sm font-medium text-gray-500">Estado</th>
-                <th className="text-left px-5 py-3 text-sm font-medium text-gray-500">Notas</th>
-                <th className="text-left px-5 py-3 text-sm font-medium text-gray-500">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {sorted.map((a) => (
-                <>
-                  <tr key={a.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3 text-sm font-medium text-gray-800">{a.customerName}</td>
-                    <td className="px-5 py-3 text-sm text-gray-600">{getServiceName(a.serviceId)}</td>
-                    <td className="px-5 py-3 text-sm text-gray-600">{formatDate(a.appointmentDate)}</td>
-                    <td className="px-5 py-3 text-sm text-gray-600">{formatTime(a.appointmentDate)} — {formatTime(a.endTime)}</td>
-                    <td className="px-5 py-3">{statusBadge(a.status)}</td>
-                    <td className="px-5 py-3">
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  {['Cliente', 'Servicio', 'Fecha', 'Hora', 'Estado', 'Notas', 'Acciones'].map((h) => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {sorted.map((a) => (
+                  <tr key={a.id} className="hover:bg-gray-50 transition-colors group">
+                    <td className="px-4 py-3 font-medium text-gray-900">{a.customerName}</td>
+                    <td className="px-4 py-3 text-gray-500 max-w-[140px] truncate">{getServiceName(a.serviceId)}</td>
+                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(a.appointmentDate)}</td>
+                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatTime(a.appointmentDate)} — {formatTime(a.endTime)}</td>
+                    <td className="px-4 py-3">{statusBadge(a.status)}</td>
+                    <td className="px-4 py-3 max-w-[160px]">
                       {editingNotes === a.id ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <input
                             autoFocus
                             value={notesValue}
                             onChange={(e) => setNotesValue(e.target.value)}
-                            placeholder="Agregar nota..."
-                            className="text-xs border border-gray-300 rounded px-2 py-1 w-40 focus:ring-1 focus:ring-indigo-400 outline-none"
+                            placeholder="Nota interna…"
+                            className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 w-32 focus:ring-1 focus:ring-indigo-400 outline-none"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') saveNotes(a.id)
                               if (e.key === 'Escape') setEditingNotes(null)
@@ -187,60 +200,77 @@ export default function AppointmentsList() {
                           />
                           <button onClick={() => saveNotes(a.id)} disabled={savingNotes}
                             className="text-xs text-green-600 hover:text-green-800 font-medium">
-                            {savingNotes ? '...' : 'OK'}
+                            {savingNotes ? '…' : 'OK'}
                           </button>
-                          <button onClick={() => setEditingNotes(null)} className="text-xs text-gray-400 hover:text-gray-600" aria-label="Cancelar"><XIcon className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setEditingNotes(null)} className="text-gray-400 hover:text-gray-600" aria-label="Cancelar">
+                            <XIcon className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ) : (
                         <button
                           onClick={() => startEditNotes(a)}
-                          className="text-xs text-gray-500 hover:text-indigo-600 transition-colors text-left max-w-[150px] truncate block"
+                          className="text-xs text-left truncate block w-full max-w-[140px] transition-colors"
                           title={a.notes ?? 'Agregar nota'}
                         >
-                          {a.notes ? (
-                            <span className="italic">{a.notes}</span>
-                          ) : (
-                            <span className="text-gray-300 hover:text-indigo-400">+ nota</span>
-                          )}
+                          {a.notes
+                            ? <span className="italic text-gray-500">{a.notes}</span>
+                            : <span className="text-gray-300 group-hover:text-indigo-400">+ nota</span>}
                         </button>
                       )}
                     </td>
-                    <td className="px-5 py-3">{statusActions(a)}</td>
+                    <td className="px-4 py-3">{actionButtons(a)}</td>
                   </tr>
-                </>
-              ))}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-          {/* Mobile */}
+          {/* Mobile cards */}
           <div className="sm:hidden divide-y divide-gray-100">
             {sorted.map((a) => (
-              <div key={a.id} className="p-4 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="font-medium text-gray-800">{a.customerName}</span>
+              <div key={a.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-gray-900 truncate">{a.customerName}</div>
+                    <div className="text-xs text-gray-500 mt-0.5 truncate">{getServiceName(a.serviceId)} · {a.durationMinutes} min</div>
+                  </div>
                   {statusBadge(a.status)}
                 </div>
-                <div className="text-sm text-gray-500">{getServiceName(a.serviceId)} · {a.durationMinutes} min</div>
-                <div className="text-sm text-gray-500">{formatDate(a.appointmentDate)} · {formatTime(a.appointmentDate)}</div>
-                {a.notes && <div className="text-xs text-gray-400 italic bg-gray-50 rounded px-2 py-1">{a.notes}</div>}
-                <div className="flex justify-between items-center pt-1">
-                  {statusActions(a)}
-                  <button onClick={() => startEditNotes(a)} className="text-xs text-gray-400 hover:text-indigo-600">
+
+                <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                  📅 {formatDate(a.appointmentDate)} · {formatTime(a.appointmentDate)}
+                </div>
+
+                {a.notes && (
+                  <div className="text-xs text-gray-500 italic bg-gray-50 rounded-lg px-3 py-2">
+                    "{a.notes}"
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex gap-1.5 flex-wrap">{actionButtons(a)}</div>
+                  <button
+                    onClick={() => startEditNotes(a)}
+                    className="text-xs text-indigo-500 hover:text-indigo-700 font-medium"
+                  >
                     {a.notes ? 'Editar nota' : '+ nota'}
                   </button>
                 </div>
+
                 {editingNotes === a.id && (
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-2">
                     <input
                       autoFocus
                       value={notesValue}
                       onChange={(e) => setNotesValue(e.target.value)}
-                      placeholder="Nota interna..."
-                      className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-400 outline-none"
+                      placeholder="Nota interna…"
+                      className="flex-1 min-w-0 text-xs border border-gray-300 rounded-lg px-3 py-2 focus:ring-1 focus:ring-indigo-400 outline-none"
                     />
                     <button onClick={() => saveNotes(a.id)} disabled={savingNotes}
-                      className="text-xs text-green-600 font-medium">{savingNotes ? '...' : 'OK'}</button>
-                    <button onClick={() => setEditingNotes(null)} aria-label="Cancelar" className="text-xs text-gray-400"><XIcon className="w-3.5 h-3.5" /></button>
+                      className="text-xs text-green-600 font-semibold px-2">{savingNotes ? '…' : 'OK'}</button>
+                    <button onClick={() => setEditingNotes(null)} aria-label="Cancelar" className="text-gray-400">
+                      <XIcon className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 )}
               </div>

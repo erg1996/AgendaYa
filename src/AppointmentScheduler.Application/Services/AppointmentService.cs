@@ -13,19 +13,22 @@ public class AppointmentService
     private readonly IBusinessRepository _businessRepository;
     private readonly IWorkingHoursRepository _workingHoursRepository;
     private readonly IEmailService _emailService;
+    private readonly AppointmentActionOptions _actionOptions;
 
     public AppointmentService(
         IAppointmentRepository appointmentRepository,
         IServiceRepository serviceRepository,
         IBusinessRepository businessRepository,
         IWorkingHoursRepository workingHoursRepository,
-        IEmailService emailService)
+        IEmailService emailService,
+        AppointmentActionOptions actionOptions)
     {
         _appointmentRepository = appointmentRepository;
         _serviceRepository = serviceRepository;
         _businessRepository = businessRepository;
         _workingHoursRepository = workingHoursRepository;
         _emailService = emailService;
+        _actionOptions = actionOptions;
     }
 
     public async Task<AppointmentResponse> CreateAsync(CreateAppointmentRequest request)
@@ -53,16 +56,6 @@ public class AppointmentService
         if (appointmentDate < dayStart || endTime > dayEnd)
             throw new ConflictException("The appointment falls outside of working hours.");
 
-        // Validate no overlap (only non-cancelled appointments)
-        var existingAppointments = await _appointmentRepository.GetByBusinessIdAndDateAsync(request.BusinessId, appointmentDate);
-
-        bool hasConflict = existingAppointments
-            .Where(a => a.Status != AppointmentStatus.Cancelled)
-            .Any(a => appointmentDate < a.EndTime && a.AppointmentDate < endTime);
-
-        if (hasConflict)
-            throw new ConflictException("The requested time slot conflicts with an existing appointment.");
-
         var appointment = new Appointment
         {
             Id = Guid.NewGuid(),
@@ -77,8 +70,11 @@ public class AppointmentService
             CreatedAt = DateTime.UtcNow
         };
 
-        await _appointmentRepository.AddAsync(appointment);
-        await _appointmentRepository.SaveChangesAsync();
+        // Atomic overlap check + insert under a serializable transaction so two
+        // concurrent bookings cannot both win the same slot.
+        var created = await _appointmentRepository.TryCreateWithOverlapCheckAsync(appointment);
+        if (!created)
+            throw new ConflictException("The requested time slot conflicts with an existing appointment.");
 
         // Send confirmation email (fire-and-forget)
         if (!string.IsNullOrWhiteSpace(appointment.CustomerEmail))
@@ -145,14 +141,70 @@ public class AppointmentService
 
         var business = await _businessRepository.GetByIdAsync(businessId);
         var template = business?.WhatsAppReminderTemplate;
+        // Tokens expire 48h after generation — enough time to click the link after
+        // receiving the message, short enough that a leaked token goes stale fast.
+        var tokenExpires = DateTimeOffset.UtcNow.AddHours(48);
 
         return appointments.Select(a =>
         {
             var phone = PhoneNormalizer.NormalizeForWaMe(a.CustomerPhone)!;
-            var message = WhatsAppTemplateRenderer.Render(template, a.CustomerName, a.Business.Name, a.Service.Name, a.AppointmentDate);
+            var confirmUrl = BuildActionUrl(a.Id, AppointmentAction.Confirm, tokenExpires);
+            var cancelUrl = BuildActionUrl(a.Id, AppointmentAction.Cancel, tokenExpires);
+            var message = WhatsAppTemplateRenderer.Render(
+                template, a.CustomerName, a.Business.Name, a.Service.Name, a.AppointmentDate,
+                confirmUrl, cancelUrl);
             var url = WhatsAppTemplateRenderer.BuildWaUrl(phone, message);
             return new PendingReminderResponse(a.Id, a.CustomerName, a.CustomerPhone!, a.AppointmentDate, a.Service.Name, a.Business.Name, url, a.WhatsAppReminderSent);
         }).ToList();
+    }
+
+    private string BuildActionUrl(Guid appointmentId, AppointmentAction action, DateTimeOffset expires)
+    {
+        var token = AppointmentActionToken.Generate(appointmentId, action, expires, _actionOptions.HmacBaseSecret);
+        var letter = action == AppointmentAction.Confirm ? "c" : "x";
+        var baseUrl = _actionOptions.AppBaseUrl.TrimEnd('/');
+        return $"{baseUrl}/a/{letter}/{token}";
+    }
+
+    public async Task<AppointmentActionResult> ApplyActionByTokenAsync(string token)
+    {
+        if (!AppointmentActionToken.TryValidate(token, _actionOptions.HmacBaseSecret, DateTimeOffset.UtcNow, out var appointmentId, out var action))
+            return AppointmentActionResult.InvalidOrExpired();
+
+        var appointment = await _appointmentRepository.GetByIdAsync(appointmentId);
+        if (appointment == null)
+            return AppointmentActionResult.NotFound();
+
+        var business = await _businessRepository.GetByIdAsync(appointment.BusinessId);
+        var businessName = business?.Name ?? "";
+
+        // No-op if already in the target state (idempotent — safe to click twice).
+        if (action == AppointmentAction.Confirm)
+        {
+            if (appointment.Status == AppointmentStatus.Cancelled)
+                return AppointmentActionResult.AlreadyCancelled(appointment, businessName);
+            if (appointment.Status == AppointmentStatus.Completed)
+                return AppointmentActionResult.AlreadyCompleted(appointment, businessName);
+
+            if (appointment.Status != AppointmentStatus.Confirmed)
+            {
+                appointment.Status = AppointmentStatus.Confirmed;
+                await _appointmentRepository.SaveChangesAsync();
+            }
+            return AppointmentActionResult.Confirmed(appointment, businessName);
+        }
+        else
+        {
+            if (appointment.Status == AppointmentStatus.Completed)
+                return AppointmentActionResult.AlreadyCompleted(appointment, businessName);
+
+            if (appointment.Status != AppointmentStatus.Cancelled)
+            {
+                appointment.Status = AppointmentStatus.Cancelled;
+                await _appointmentRepository.SaveChangesAsync();
+            }
+            return AppointmentActionResult.Cancelled(appointment, businessName);
+        }
     }
 
     public async Task MarkWhatsAppReminderSentAsync(Guid id, Guid businessId)
@@ -181,8 +233,17 @@ public class AppointmentService
         return (from, to);
     }
 
-    private static AppointmentResponse ToResponse(Appointment a) =>
-        new(a.Id, a.BusinessId, a.ServiceId, a.CustomerName, a.CustomerEmail, a.CustomerPhone,
-            a.AppointmentDate, a.DurationMinutes, a.EndTime, a.Status.ToString(), a.Notes,
+    private static AppointmentResponse ToResponse(Appointment a)
+    {
+        var effectiveStatus = a.Status;
+        if ((a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed)
+            && a.EndTime < DateTime.Now)
+        {
+            effectiveStatus = AppointmentStatus.Completed;
+        }
+
+        return new(a.Id, a.BusinessId, a.ServiceId, a.CustomerName, a.CustomerEmail, a.CustomerPhone,
+            a.AppointmentDate, a.DurationMinutes, a.EndTime, effectiveStatus.ToString(), a.Notes,
             a.WhatsAppReminderSent, a.CreatedAt);
+    }
 }

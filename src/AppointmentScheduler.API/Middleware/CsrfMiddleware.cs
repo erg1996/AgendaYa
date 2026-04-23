@@ -30,8 +30,10 @@ public class CsrfMiddleware
             });
         }
 
-        // For state-changing requests (POST, PUT, PATCH, DELETE), validate CSRF token
-        if (IsStatefulRequest(context.Request.Method) && context.Request.Path.Value != null && !context.Request.Path.Value.Contains("/api/auth"))
+        // For state-changing requests (POST, PUT, PATCH, DELETE), validate CSRF token.
+        // Login/register are exempt because the client has no authenticated cookie yet.
+        // SameSite=Strict on auth cookies + rate limiting are the defenses there.
+        if (IsStatefulRequest(context.Request.Method) && context.Request.Path.Value != null && !IsCsrfExempt(context.Request.Path.Value))
         {
             var tokenFromHeader = context.Request.Headers[CsrfTokenHeader].ToString();
             var tokenFromCookie = context.Request.Cookies[CsrfTokenCookieName];
@@ -50,6 +52,10 @@ public class CsrfMiddleware
 
     private bool IsStatefulRequest(string method) =>
         method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE";
+
+    private static bool IsCsrfExempt(string path) =>
+        path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("/api/auth/register", StringComparison.OrdinalIgnoreCase);
 
     private static string GenerateToken()
     {

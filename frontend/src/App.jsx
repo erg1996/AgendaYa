@@ -12,6 +12,11 @@ import BookingConfirmation from './pages/BookingConfirmation'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Reminders from './pages/Reminders'
+import AdminLayout from './pages/AdminLayout'
+import AdminOverview from './pages/AdminOverview'
+import AdminBusinesses from './pages/AdminBusinesses'
+import AdminBusinessDetail from './pages/AdminBusinessDetail'
+import AdminActivity from './pages/AdminActivity'
 
 function Layout() {
   const { pathname } = useLocation()
@@ -56,6 +61,12 @@ function Layout() {
           <Route path="/book" element={<BookAppointment />} />
           <Route path="/appointments" element={<AppointmentsList />} />
           <Route path="/reminders" element={<Reminders />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminOverview />} />
+            <Route path="businesses" element={<AdminBusinesses />} />
+            <Route path="businesses/:id" element={<AdminBusinessDetail />} />
+            <Route path="activity" element={<AdminActivity />} />
+          </Route>
         </Routes>
       </main>
     </div>

@@ -7,8 +7,24 @@ using AppointmentScheduler.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Events;
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File(
+        path: Path.Combine(AppContext.BaseDirectory, "logs", "agendaya-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 14,
+        shared: true)
+    .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -55,6 +71,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("SuperAdmin", policy =>
+        policy.RequireClaim("super_admin", "true"));
+});
+
 // Rate limiting
 builder.Services.AddRateLimiter(options =>
 {
@@ -92,21 +114,50 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+
+    // Bootstrap super admin: promote user matching SuperAdmin:Email config
+    var superAdminEmail = builder.Configuration["SuperAdmin:Email"];
+    if (!string.IsNullOrWhiteSpace(superAdminEmail))
+    {
+        var normalized = superAdminEmail.Trim().ToLowerInvariant();
+        var admin = db.Users.FirstOrDefault(u => u.Email == normalized);
+        if (admin != null && !admin.IsSuperAdmin)
+        {
+            admin.IsSuperAdmin = true;
+            db.SaveChanges();
+            Log.Information("Promoted {Email} to super admin", normalized);
+        }
+    }
 }
 
+app.UseSerilogRequestLogging();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<CsrfMiddleware>();
 
 // Security headers
+var isDev = app.Environment.IsDevelopment();
+var cspProd = "default-src 'self'; " +
+              "script-src 'self'; " +
+              "style-src 'self' 'unsafe-inline'; " +
+              "img-src 'self' data: blob:; " +
+              "font-src 'self' data:; " +
+              "connect-src 'self'; " +
+              "frame-ancestors 'none'; " +
+              "base-uri 'self'; " +
+              "form-action 'self'";
+
 app.Use(async (context, next) =>
 {
-    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-    context.Response.Headers["X-Frame-Options"] = "DENY";
-    context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
-    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    if (!app.Environment.IsDevelopment())
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
+    headers["Cross-Origin-Opener-Policy"] = "same-origin";
+    if (!isDev)
     {
-        context.Response.Headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+        headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload";
+        headers["Content-Security-Policy"] = cspProd;
     }
     await next();
 });

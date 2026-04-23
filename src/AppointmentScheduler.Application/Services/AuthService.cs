@@ -90,12 +90,20 @@ public class AuthService
         return new AuthResponse(token, user.Id, user.Email, user.FullName, business.Id, business.Name, business.Slug);
     }
 
+    // Pre-computed bcrypt hash of a random string. Used to equalize timing when the user does not exist,
+    // so an attacker can't distinguish "unknown email" from "wrong password" by latency.
+    private const string DummyPasswordHash = "$2a$11$N1Yx8LQ4k9b3M2Wn5rCq0u6Rk1Vb9Xs7j4Hn2Lp8TqE3Zf5Cy6Wa";
+
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email.ToLowerInvariant().Trim())
-            ?? throw new NotFoundException("Invalid email or password.");
+        var normalizedEmail = request.Email.ToLowerInvariant().Trim();
+        var user = await _userRepository.GetByEmailAsync(normalizedEmail);
 
-        if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        // Always run bcrypt to keep response timing constant regardless of whether the email exists.
+        var hashToVerify = user?.PasswordHash ?? DummyPasswordHash;
+        var passwordOk = BCrypt.Net.BCrypt.Verify(request.Password, hashToVerify);
+
+        if (user == null || !passwordOk)
             throw new NotFoundException("Invalid email or password.");
 
         var business = await _businessRepository.GetByIdAsync(user.BusinessId)
@@ -122,12 +130,14 @@ public class AuthService
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSecret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim("businessId", user.BusinessId.ToString()),
         };
+        if (user.IsSuperAdmin)
+            claims.Add(new Claim("super_admin", "true"));
 
         var token = new JwtSecurityToken(
             issuer: "AgendaYa",

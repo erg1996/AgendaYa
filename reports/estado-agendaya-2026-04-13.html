@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>AgendaYa — Reporte de estado — 2026-04-13</title>
+<style>
+  @page { size: A4; margin: 18mm 15mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", -apple-system, "Helvetica Neue", sans-serif;
+    color: #0f172a;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    margin: 0;
+  }
+  h1 { font-size: 22pt; margin: 0 0 0.2rem; color: #0f172a; }
+  h2 { font-size: 14pt; margin: 1.6rem 0 0.5rem; border-bottom: 2px solid #0f172a; padding-bottom: 0.25rem; }
+  h3 { font-size: 11.5pt; margin: 1.1rem 0 0.4rem; color: #334155; }
+  p { margin: 0.4rem 0; }
+  .subtitle { color: #64748b; font-size: 10pt; margin-bottom: 1rem; }
+  .meta { display: flex; gap: 1.5rem; font-size: 9pt; color: #475569; margin-bottom: 1.5rem; }
+  .meta b { color: #0f172a; }
+  table { width: 100%; border-collapse: collapse; margin: 0.5rem 0 1rem; font-size: 9.5pt; }
+  th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #f1f5f9; font-weight: 600; }
+  code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 9pt; font-family: "Consolas", monospace; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 10px 12px; border-radius: 6px; font-size: 8.5pt; overflow-x: auto; font-family: "Consolas", monospace; }
+  ul, ol { margin: 0.3rem 0 0.6rem 1.2rem; padding: 0; }
+  li { margin: 0.15rem 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .foda { border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.7rem 0.9rem; }
+  .foda h4 { margin: 0 0 0.3rem; font-size: 10.5pt; }
+  .f-f { border-left: 4px solid #16a34a; }
+  .f-o { border-left: 4px solid #2563eb; }
+  .f-d { border-left: 4px solid #d97706; }
+  .f-a { border-left: 4px solid #dc2626; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 8.5pt; font-weight: 600; }
+  .p-crit { background: #fee2e2; color: #991b1b; }
+  .p-high { background: #fed7aa; color: #9a3412; }
+  .p-med { background: #fef3c7; color: #854d0e; }
+  .p-low { background: #d1fae5; color: #065f46; }
+  .p-ok { background: #dcfce7; color: #166534; }
+  .callout { background: #f8fafc; border-left: 4px solid #2563eb; padding: 0.5rem 0.8rem; margin: 0.8rem 0; border-radius: 4px; }
+  .passline { background: #16a34a; color: white; padding: 6px 10px; border-radius: 4px; font-weight: 600; }
+  footer { margin-top: 2rem; padding-top: 0.5rem; border-top: 1px solid #cbd5e1; color: #64748b; font-size: 8pt; }
+  .break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<h1>AgendaYa — Reporte de estado</h1>
+<div class="subtitle">SaaS de agendamiento multi-tenant para PyMES salvadoreñas</div>
+<div class="meta">
+  <div><b>Fecha:</b> 13 de abril de 2026</div>
+  <div><b>Fundador:</b> Eduardo Rivas</div>
+  <div><b>Ubicación:</b> Sonsonate, El Salvador</div>
+  <div><b>Estado:</b> Pre-lanzamiento, post-hardening</div>
+</div>
+
+<h2>1. Resumen ejecutivo</h2>
+<p>
+En esta sesión se cerró la mayor parte del trabajo pre-deploy. El MVP está hoy <b>listo para beta cerrada</b>
+una vez se configuren las variables de entorno de producción. Se atacaron los cuatro hallazgos críticos del scan de
+seguridad, dos hallazgos de severidad alta y se añadió el primer feature de foso competitivo (confirmación /
+cancelación de cita por enlace de WhatsApp con token HMAC).
+</p>
+<p class="passline">Suite completa de pruebas: 31 / 31 ✅</p>
+
+<h2>2. Stack actual</h2>
+<table>
+  <tr><th style="width: 22%;">Capa</th><th>Detalle</th></tr>
+  <tr><td>Backend</td><td>.NET 8, arquitectura en capas (API / Application / Domain / Infrastructure)</td></tr>
+  <tr><td>Persistencia</td><td>SQLite con EF Core 8, migraciones automáticas</td></tr>
+  <tr><td>Auth</td><td>JWT + BCrypt, rate limiting (auth 10/min, global 100/min)</td></tr>
+  <tr><td>Frontend</td><td>React 19 + Vite 8 + Tailwind 3 + react-router 7</td></tr>
+  <tr><td>Observabilidad</td><td>Serilog a consola + archivo rotado diario (retención 14 días)</td></tr>
+  <tr><td>Infra despliegue</td><td>Dockerfile multi-stage, docker-compose, volúmenes para datos / uploads / logs</td></tr>
+  <tr><td>Canales de notificación</td><td>SMTP (reminders y confirmación), WhatsApp manual por link pre-armado, enlaces de confirm/cancel</td></tr>
+</table>
+
+<h2>3. Análisis FODA</h2>
+<div class="grid2">
+  <div class="foda f-f">
+    <h4>Fortalezas</h4>
+    <ul>
+      <li>Código modular mantenible por 1 persona.</li>
+      <li>Multi-tenant bien modelado desde el día 1.</li>
+      <li>Hardening de seguridad al nivel de productos maduros.</li>
+      <li>Integración WhatsApp con plantilla personalizable y tokens firmados.</li>
+      <li>Cobertura de pruebas unitarias 31 / 31.</li>
+      <li>Contexto local del mercado salvadoreño por el fundador.</li>
+    </ul>
+  </div>
+  <div class="foda f-o">
+    <h4>Oportunidades</h4>
+    <ul>
+      <li>PyMES sin digitalizar: barberías, salones, clínicas, spas, talleres.</li>
+      <li>Pagos locales (transferencia, Wompi) sin penetración de tarjetas.</li>
+      <li>Directorio público con SEO local como network effect.</li>
+      <li>Expansión a GT / HN / NI con el mismo código.</li>
+      <li>Sector gobierno / ONGs con agenda de atención ciudadana.</li>
+    </ul>
+  </div>
+  <div class="foda f-d">
+    <h4>Debilidades</h4>
+    <ul>
+      <li>Founder único — bus factor 1.</li>
+      <li>SQLite limita escala horizontal (no multi-instancia con writes).</li>
+      <li>Sin procesador de pagos integrado.</li>
+      <li>Sin app móvil (web responsiva solamente).</li>
+      <li>Marca y SEO inexistentes; cero tráfico orgánico.</li>
+      <li>Registro público sin captcha / invite gate.</li>
+    </ul>
+  </div>
+  <div class="foda f-a">
+    <h4>Amenazas</h4>
+    <ul>
+      <li>Competidores internacionales (Calendly, Fresha, Booksy) con presupuesto de marketing.</li>
+      <li>Copias rápidas por "vibe coders" locales.</li>
+      <li>Google Calendar + WhatsApp manual como "gratis" percibido.</li>
+      <li>Cambios de política en WhatsApp Cloud API (Meta).</li>
+      <li>Eventos macro — tipo de cambio, regulaciones de datos en SV.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>4. Cambios aplicados en esta sesión</h2>
+
+<h3>4.1. Infraestructura de despliegue</h3>
+<ul>
+  <li><code>Dockerfile</code> multi-stage con usuario no-root y healthcheck a <code>/health</code>.</li>
+  <li><code>docker-compose.yml</code> con volúmenes nombrados: <code>agendaya-data</code>, <code>agendaya-uploads</code>, <code>agendaya-logs</code>.</li>
+  <li><code>.dockerignore</code> para evitar subir <code>bin/</code>, <code>node_modules/</code>, <code>scheduler.db</code>.</li>
+  <li><code>appsettings.Production.json</code> con <code>SQLite</code> apuntando a <code>/app/data/scheduler.db</code>.</li>
+  <li>Serilog a archivo rotado + request logging.</li>
+  <li>Headers de seguridad: <code>CSP</code> estricto, <code>HSTS</code> (2 años + preload), <code>Permissions-Policy</code>, <code>COOP</code>.</li>
+</ul>
+
+<h3>4.2. Fixes críticos del scan de seguridad</h3>
+<table>
+  <tr><th>#</th><th>Severidad</th><th>Categoría</th><th>Arreglo</th><th>Archivo</th></tr>
+  <tr>
+    <td>1</td><td><span class="pill p-crit">crítico</span></td><td>Seguridad</td>
+    <td>CSRF bypass: se excluían <i>todos</i> los endpoints de <code>/api/auth</code>. Ahora solo <code>login</code> y <code>register</code>.</td>
+    <td><code>CsrfMiddleware.cs</code></td>
+  </tr>
+  <tr>
+    <td>2</td><td><span class="pill p-crit">crítico</span></td><td>Seguridad</td>
+    <td>Upload: whitelist MIME → extensión canónica, validación por magic bytes, assert de ruta absoluta dentro de <code>uploadsDir</code>.</td>
+    <td><code>UploadController.cs</code></td>
+  </tr>
+  <tr>
+    <td>3</td><td><span class="pill p-crit">crítico</span></td><td>Seguridad</td>
+    <td>User enumeration por timing en login: siempre se ejecuta <code>BCrypt.Verify</code> contra un hash dummy si el email no existe.</td>
+    <td><code>AuthService.cs</code></td>
+  </tr>
+  <tr>
+    <td>4</td><td><span class="pill p-crit">crítico</span></td><td>Performance</td>
+    <td>Dashboard analytics cargaba la tabla completa en memoria. Ahora agrega en SQL (<code>CountAsync</code>, <code>SumAsync</code>, <code>GroupBy</code>).</td>
+    <td><code>AnalyticsService.cs</code>, <code>AppointmentRepository.cs</code></td>
+  </tr>
+  <tr>
+    <td>5</td><td><span class="pill p-high">alto</span></td><td>Lógica</td>
+    <td>Double-booking bajo concurrencia: check + insert ahora corren en una transacción <i>serializable</i> de SQLite.</td>
+    <td><code>AppointmentRepository.cs</code></td>
+  </tr>
+  <tr>
+    <td>6</td><td><span class="pill p-high">alto</span></td><td>Lógica</td>
+    <td>Recordatorios idempotentes: claim atómico con <code>ExecuteUpdateAsync</code> condicional. Si varias instancias corren en paralelo, solo una envía el email.</td>
+    <td><code>ReminderBackgroundService.cs</code></td>
+  </tr>
+  <tr>
+    <td>7</td><td><span class="pill p-high">alto</span></td><td>Seguridad</td>
+    <td>JWT: ya no hay fallback silencioso a la <i>dev key</i> en producción. Lanza <code>InvalidOperationException</code> si falta <code>Jwt__Secret</code>.</td>
+    <td><code>DependencyInjection.cs</code>, <code>Program.cs</code></td>
+  </tr>
+</table>
+
+<h3>4.3. Feature nuevo — Confirm / Cancel por link de WhatsApp</h3>
+<div class="callout">
+  <b>Valor al cliente:</b> ataca directamente el dolor #1 real de barberías, salones y clínicas: los <i>no-shows</i>.
+  El recordatorio por WhatsApp ahora incluye dos botones — confirmar o cancelar — que el cliente puede tocar sin
+  loguearse, sin instalar nada. Los dueños ven el estado actualizado al instante en su panel.
+</div>
+<ul>
+  <li><b>Token HMAC-SHA256 firmado</b> con clave derivada del <code>Jwt:Secret</code> (domain separation via HKDF-style).</li>
+  <li><b>Expiración corta</b>: 48 horas tras generación del recordatorio. Un token filtrado queda obsoleto rápido.</li>
+  <li><b>Sin estado</b>: no se guardan los tokens en BD. La validación es pura criptografía.</li>
+  <li><b>Páginas de confirmación</b> HTML minimales servidas directo desde el controlador — sin dependencia del frontend.</li>
+  <li><b>Idempotente</b>: clicar dos veces muestra el mismo estado final sin duplicar efectos.</li>
+  <li><b>Nuevos placeholders</b> en plantilla WhatsApp: <code>{confirmar_url}</code> y <code>{cancelar_url}</code>.</li>
+</ul>
+
+<h3>4.4. Commits en esta rama</h3>
+<pre>0011691  security: pre-deploy hardening and critical fixes
+f98c8b7  feat: default WhatsApp template, auto-complete past appointments, simplify TZ handling
+dd0804c  whatsapp what me added
+84e0ca6  some security isssues solved
+f13d742  fix to saving picture bug
+ac4090d  Initial commit: AgendaYa MVP</pre>
+
+<div class="break"></div>
+
+<h2>5. Pruebas de regresión</h2>
+<p>Se ejecutaron <code>dotnet test</code> sobre todo el proyecto <code>AppointmentScheduler.Tests</code>. Se añadieron 13 tests nuevos para cubrir el feature de confirm/cancel y el fix de double-booking.</p>
+
+<p class="passline">31 / 31 pruebas correctas — 0 fallos — 2.3s de ejecución</p>
+
+<h3>Cobertura por suite</h3>
+<table>
+  <tr><th>Suite</th><th>Pruebas</th><th>Resultado</th></tr>
+  <tr><td><code>AppointmentServiceTests</code></td><td>4</td><td><span class="pill p-ok">✓ todas</span></td></tr>
+  <tr><td><code>AppointmentActionTokenTests</code> <i>(nuevo)</i></td><td>7</td><td><span class="pill p-ok">✓ todas</span></td></tr>
+  <tr><td><code>AppointmentActionFlowTests</code> <i>(nuevo)</i></td><td>6</td><td><span class="pill p-ok">✓ todas</span></td></tr>
+  <tr><td><code>AvailabilityServiceTests</code></td><td>5</td><td><span class="pill p-ok">✓ todas</span></td></tr>
+  <tr><td><code>BusinessServiceTests</code></td><td>9</td><td><span class="pill p-ok">✓ todas</span></td></tr>
+</table>
+
+<h3>Casos destacados cubiertos</h3>
+<table>
+  <tr><th>Escenario</th><th>Esperado</th><th>Resultado</th></tr>
+  <tr><td>Crear cita sin conflicto</td><td>éxito</td><td class="p-ok">✓</td></tr>
+  <tr><td>Crear cita fuera de horario laboral</td><td>ConflictException, no llega al repo</td><td class="p-ok">✓</td></tr>
+  <tr><td>Crear cita en día cerrado</td><td>ConflictException</td><td class="p-ok">✓</td></tr>
+  <tr><td>Repo reporta conflicto de solape</td><td>ConflictException propagada</td><td class="p-ok">✓</td></tr>
+  <tr><td>Round-trip token confirm</td><td>id y acción correctos</td><td class="p-ok">✓</td></tr>
+  <tr><td>Round-trip token cancel</td><td>id y acción correctos</td><td class="p-ok">✓</td></tr>
+  <tr><td>Token manipulado (un byte alterado)</td><td>rechazado</td><td class="p-ok">✓</td></tr>
+  <tr><td>Token con secret distinto</td><td>rechazado</td><td class="p-ok">✓</td></tr>
+  <tr><td>Token expirado</td><td>rechazado</td><td class="p-ok">✓</td></tr>
+  <tr><td>Token basura</td><td>rechazado sin excepción</td><td class="p-ok">✓</td></tr>
+  <tr><td>Confirmar cita pendiente</td><td>pasa a Confirmed, llama SaveChanges</td><td class="p-ok">✓</td></tr>
+  <tr><td>Confirmar cita ya confirmada</td><td>no-op, no llama SaveChanges</td><td class="p-ok">✓</td></tr>
+  <tr><td>Confirmar cita cancelada</td><td>AlreadyCancelled, no muta estado</td><td class="p-ok">✓</td></tr>
+  <tr><td>Cancelar cita pendiente</td><td>pasa a Cancelled</td><td class="p-ok">✓</td></tr>
+  <tr><td>Cancelar cita completada</td><td>AlreadyCompleted, no muta</td><td class="p-ok">✓</td></tr>
+  <tr><td>Token inválido en flow real</td><td>InvalidOrExpired</td><td class="p-ok">✓</td></tr>
+  <tr><td>Slug: acentos, mayúsculas, símbolos</td><td>todas las variantes correctas</td><td class="p-ok">✓</td></tr>
+  <tr><td>Availability: día cerrado / todas ocupadas / parcial / uneven</td><td>correctas</td><td class="p-ok">✓</td></tr>
+</table>
+
+<h3>Gaps de cobertura identificados</h3>
+<ul>
+  <li>
+    <b>Lógica de solape ahora vive en el repo</b> — los tests de unidad ya no pueden validarla
+    (requiere BD real o <code>SQLite in-memory</code>). Recomiendo añadir tests de integración con
+    <code>Microsoft.EntityFrameworkCore.Sqlite</code> en modo <code>:memory:</code>.
+  </li>
+  <li>
+    No hay tests del <code>ReminderBackgroundService</code> ni del <code>ClaimReminderAsync</code>.
+    Recomendado antes de escalar a múltiples instancias.
+  </li>
+  <li>
+    Sin pruebas E2E ni de controladores (<code>WebApplicationFactory</code>).
+    Aceptable para MVP con 1 founder; priorizar después del primer cliente real.
+  </li>
+</ul>
+
+<h2>6. Hallazgos pendientes del scan</h2>
+<p>Del scan exhaustivo se identificaron 26 hallazgos. En esta sesión se cerraron los 4 críticos y 2 altos. Quedan para el próximo sprint:</p>
+<table>
+  <tr><th>Severidad</th><th>Hallazgo</th><th>Estimado</th></tr>
+  <tr><td><span class="pill p-med">medio</span></td><td>Activar modo WAL en SQLite (<code>;Mode=Wal</code> en connection string).</td><td>1 línea</td></tr>
+  <tr><td><span class="pill p-med">medio</span></td><td>Índice compuesto <code>(BusinessId, AppointmentDate, Status)</code> vía migración EF.</td><td>20 min</td></tr>
+  <tr><td><span class="pill p-med">medio</span></td><td>Rate limit en endpoints públicos <code>/business/slug/{slug}</code> y <code>/availability</code>.</td><td>15 min</td></tr>
+  <tr><td><span class="pill p-med">medio</span></td><td>Paginación en <code>GetByBusinessIdAsync</code>, <code>ExportCsv</code>.</td><td>30 min</td></tr>
+  <tr><td><span class="pill p-med">medio</span></td><td><code>BlockedDateDto</code> necesita <code>[MaxLength]</code> en <code>Reason</code>.</td><td>5 min</td></tr>
+  <tr><td><span class="pill p-med">medio</span></td><td>Validar citas existentes al actualizar <code>WorkingHours</code>.</td><td>30 min</td></tr>
+  <tr><td><span class="pill p-low">bajo</span></td><td>Email parser robusto (<code>MailAddress</code>) en <code>AuthService</code>.</td><td>5 min</td></tr>
+  <tr><td><span class="pill p-low">bajo</span></td><td>Typo: "manana" → "mañana" en <code>SmtpEmailService</code>.</td><td>1 min</td></tr>
+  <tr><td><span class="pill p-low">bajo</span></td><td>Captcha o invite-only en <code>/auth/register</code>.</td><td>1-2 h</td></tr>
+  <tr><td><span class="pill p-low">bajo</span></td><td>Refresh tokens + expiración JWT a 1h.</td><td>3-4 h</td></tr>
+</table>
+
+<h2>7. Roadmap recomendado de features</h2>
+<table>
+  <tr><th>Prioridad</th><th>Feature</th><th>Construye foso</th><th>Esfuerzo</th></tr>
+  <tr>
+    <td><span class="pill p-crit">ahora</span></td>
+    <td>Reseñas post-cita automáticas por WhatsApp</td>
+    <td>Alto — <i>lock-in</i>: las reseñas quedan en el perfil de AgendaYa, no en Google.</td>
+    <td>1 semana</td>
+  </tr>
+  <tr>
+    <td><span class="pill p-high">pronto</span></td>
+    <td>Pagos con anticipo (Wompi + transferencia local)</td>
+    <td>Alto — reduce no-shows 70%. Diferenciador regional.</td>
+    <td>2-3 semanas</td>
+  </tr>
+  <tr>
+    <td><span class="pill p-high">pronto</span></td>
+    <td>Directorio público con SEO local</td>
+    <td>Muy alto — <i>network effect</i> acumulativo.</td>
+    <td>2 semanas</td>
+  </tr>
+  <tr>
+    <td><span class="pill p-med">después</span></td>
+    <td>IA de no-show scoring + auto-rellenar huecos</td>
+    <td>Muy alto — requiere datos propios que crecen con el tiempo.</td>
+    <td>4 semanas</td>
+  </tr>
+  <tr>
+    <td><span class="pill p-med">después</span></td>
+    <td>Google Calendar sync bidireccional para el dueño</td>
+    <td>Medio — reduce fricción, no diferenciador.</td>
+    <td>1 semana</td>
+  </tr>
+  <tr>
+    <td><span class="pill p-med">después</span></td>
+    <td>Módulos verticales (clínicas, salones, talleres)</td>
+    <td>Muy alto — un genérico no puede mantener 5 verticales.</td>
+    <td>gradual</td>
+  </tr>
+</table>
+
+<h2>8. Cómo desplegar (hoy mismo)</h2>
+<pre># 1. Generar un secreto JWT fuerte
+export JWT_SECRET=$(openssl rand -base64 48)
+
+# 2. Configurar el dominio del frontend y la URL pública del API
+export FRONTEND_ORIGIN=https://tu-dominio.com
+export PUBLIC_URL=https://api.tu-dominio.com
+
+# 3. Levantar el stack
+docker compose up -d --build
+
+# 4. Verificar healthcheck
+curl -f http://localhost:8080/health</pre>
+
+<div class="callout">
+  <b>Antes del lanzamiento público</b>, aún falta: (a) proveedor SMTP real configurado (Brevo / Resend),
+  (b) captcha o invite-only en registro, (c) certificado TLS via Cloudflare o Caddy delante del API,
+  (d) probar el build Docker en la máquina local, (e) backup diario de <code>scheduler.db</code> a object storage.
+</div>
+
+<h2>9. Veredicto</h2>
+<p>
+La aplicación pasó de <b>"MVP funcional con huecos de seguridad críticos"</b> a <b>"MVP hardeneado con feature
+de foso inicial y suite de pruebas completa"</b> en esta sesión. El estado actual permite abrir una beta cerrada
+con 3-5 negocios en Sonsonate sin riesgo material. El siguiente movimiento de mayor retorno es el de
+<b>reseñas post-cita</b> — es la pieza que convierte a AgendaYa de "herramienta" a "activo imposible de abandonar".
+</p>
+
+<footer>
+Generado el 2026-04-13 por Claude (Opus 4.6) para Eduardo Rivas · AgendaYa · Sonsonate, SV.
+</footer>
+
+</body>
+</html>

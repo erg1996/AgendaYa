@@ -180,6 +180,12 @@ export const downloadReportCsv = async (businessId, from, to) => {
   URL.revokeObjectURL(url)
 }
 
+// ─── Admin (super admin only) ─────────────────────────────────────────────────
+export const getAdminOverview = () => authRequest('/api/admin/overview')
+export const getAdminBusinesses = () => authRequest('/api/admin/businesses')
+export const getAdminBusinessDetail = (id) => authRequest(`/api/admin/businesses/${id}`)
+export const getAdminActivity = (limit = 50) => authRequest(`/api/admin/activity?limit=${limit}`)
+
 // ─── Upload ───────────────────────────────────────────────────────────────────
 export const uploadLogo = async (file) => {
   const token = getToken()

@@ -17,6 +17,9 @@ public class ServiceRepository : IServiceRepository
     public async Task<List<Service>> GetByBusinessIdAsync(Guid businessId) =>
         await _context.Services.Where(s => s.BusinessId == businessId).ToListAsync();
 
+    public async Task<int> CountByBusinessIdAsync(Guid businessId) =>
+        await _context.Services.CountAsync(s => s.BusinessId == businessId);
+
     public async Task AddAsync(Service service) =>
         await _context.Services.AddAsync(service);
 

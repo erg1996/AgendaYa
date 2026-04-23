@@ -41,23 +41,26 @@ export default function BusinessPanel() {
   ]
 
   return (
-    <div className="px-4 sm:px-6 py-4 sm:py-8">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
-        <h1 className="text-xl sm:text-3xl font-bold text-gray-800 break-words flex-1">{business.name}</h1>
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 break-words">{business.name}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Configuración del negocio</p>
+        </div>
         <button
           onClick={() => setShowSwitcher(true)}
-          className="text-xs sm:text-sm text-indigo-600 hover:text-indigo-800 font-medium whitespace-nowrap"
+          className="text-sm text-indigo-600 hover:text-indigo-800 font-medium whitespace-nowrap px-4 py-2 rounded-xl border border-indigo-200 hover:bg-indigo-50 transition-all"
         >
           Cambiar negocio
         </button>
       </div>
 
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-2 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
               tab === t.key
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'text-gray-500 hover:text-gray-700'
@@ -262,7 +265,7 @@ function BusinessInfo({ business }) {
   return (
     <div className="space-y-6">
       {/* Public booking link */}
-      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5">
         <h2 className="font-semibold text-indigo-800 mb-2">Link de Reserva para Clientes</h2>
         <p className="text-indigo-600 text-sm mb-3">
           Comparte este link para que tus clientes agenden citas:
@@ -286,7 +289,7 @@ function BusinessInfo({ business }) {
       </div>
 
       {/* Branding */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6">
         <h2 className="font-semibold text-gray-800 mb-4 text-sm sm:text-base">Personalización</h2>
         <div className="space-y-6 sm:space-y-0 sm:flex sm:gap-6 sm:items-start sm:flex-wrap">
           {/* Logo */}
@@ -314,7 +317,7 @@ function BusinessInfo({ business }) {
                 type="color"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
-                className="w-10 h-9 sm:w-12 sm:h-10 rounded-lg border border-gray-300 cursor-pointer p-1"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg border border-gray-300 cursor-pointer p-1"
               />
               <span className="text-xs sm:text-sm font-mono text-gray-600">{color}</span>
               <div
@@ -338,7 +341,7 @@ function BusinessInfo({ business }) {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
         <h2 className="font-semibold text-gray-800 mb-4">Información del Negocio</h2>
         <div className="space-y-3 text-sm">
           <div className="flex justify-between py-2 border-b border-gray-100">
@@ -670,7 +673,7 @@ Si necesitas cancelar o cambiar tu cita, por favor contáctanos.
 
 function WhatsAppTab({ business }) {
   const { setBusiness } = useBusiness()
-  const [template, setTemplate] = useState(business.whatsAppReminderTemplate ?? '')
+  const [template, setTemplate] = useState(business.whatsAppReminderTemplate ?? DEFAULT_TEMPLATE)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
 

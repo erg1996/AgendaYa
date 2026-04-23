@@ -8,6 +8,7 @@ public class User
     public string FullName { get; set; } = string.Empty;
     public Guid BusinessId { get; set; }
     public DateTime CreatedAt { get; set; }
+    public bool IsSuperAdmin { get; set; }
 
     public Business Business { get; set; } = null!;
     public List<UserBusiness> UserBusinesses { get; set; } = new();
