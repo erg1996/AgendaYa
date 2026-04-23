@@ -10,11 +10,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
       Jwt__Secret: ${JWT_SECRET:?JWT_SECRET is required}
-      ConnectionStrings__DefaultConnection: "Data Source=/app/data/scheduler.db;Cache=Shared"
+      ConnectionStrings__DefaultConnection: ${DATABASE_URL:?DATABASE_URL is required}
       Cors__AllowedOrigins__0: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}
       PublicUrl__AppBaseUrl: ${PUBLIC_URL:?PUBLIC_URL is required}
     volumes:
-      - agendaya-data:/app/data
       - agendaya-uploads:/app/wwwroot/uploads
       - agendaya-logs:/app/logs
     healthcheck:
@@ -24,6 +23,5 @@ services:
       retries: 3
 
 volumes:
-  agendaya-data:
   agendaya-uploads:
   agendaya-logs:

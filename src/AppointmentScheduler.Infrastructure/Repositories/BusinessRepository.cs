@@ -20,6 +20,12 @@ public class BusinessRepository : IBusinessRepository
     public async Task AddAsync(Business business) =>
         await _context.Businesses.AddAsync(business);
 
+    public Task DeleteAsync(Business business)
+    {
+        _context.Businesses.Remove(business);
+        return Task.CompletedTask;
+    }
+
     public async Task SaveChangesAsync() =>
         await _context.SaveChangesAsync();
 }

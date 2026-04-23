@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<BlockedDate> BlockedDates => Set<BlockedDate>();
     public DbSet<User> Users => Set<User>();
     public DbSet<UserBusiness> UserBusinesses => Set<UserBusiness>();
+    public DbSet<WhatsAppMessageTemplate> WhatsAppMessageTemplates => Set<WhatsAppMessageTemplate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +26,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.LogoUrl).HasMaxLength(500);
             entity.Property(e => e.BrandColor).HasMaxLength(20);
             entity.Property(e => e.WhatsAppReminderTemplate).HasMaxLength(2000);
+            entity.Property(e => e.Address).HasMaxLength(500);
             entity.HasIndex(e => e.Slug).IsUnique();
         });
 
@@ -110,6 +112,17 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(e => e.Business)
                 .WithMany(b => b.UserBusinesses)
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WhatsAppMessageTemplate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Body).IsRequired();
+            entity.HasOne(e => e.Business)
+                .WithMany()
                 .HasForeignKey(e => e.BusinessId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

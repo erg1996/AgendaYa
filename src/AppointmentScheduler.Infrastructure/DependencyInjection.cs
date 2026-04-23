@@ -4,6 +4,7 @@ using AppointmentScheduler.Infrastructure.Data;
 using AppointmentScheduler.Infrastructure.Repositories;
 using AppointmentScheduler.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,8 +14,21 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        // Support both URL format (postgresql://...) and key=value format
+        var connStr = configuration.GetConnectionString("DefaultConnection")
+            ?? Environment.GetEnvironmentVariable("DATABASE_URL")
+            ?? throw new InvalidOperationException("No database connection string configured.");
+
+        // Normalize URI → Npgsql key=value if needed
+        if (connStr.StartsWith("postgresql://") || connStr.StartsWith("postgres://"))
+        {
+            var builder = new NpgsqlConnectionStringBuilder(connStr);
+            connStr = builder.ConnectionString;
+        }
+
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlite(configuration.GetConnectionString("DefaultConnection")));
+            options.UseNpgsql(connStr, npgsql =>
+                npgsql.EnableRetryOnFailure(maxRetryCount: 3)));
 
         // Repositories
         services.AddScoped<IBusinessRepository, BusinessRepository>();
