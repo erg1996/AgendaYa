@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useBusiness } from '../components/BusinessContext'
-import { getPendingWhatsAppReminders, markWhatsAppReminderSent } from '../api/client'
+import { getPendingWhatsAppReminders, markWhatsAppReminderSent, getWhatsAppSession } from '../api/client'
 import { WhatsAppIcon, BellIcon } from '../components/Icons'
 
 const ES_TZ = 'America/El_Salvador'
+const WA_STATUS = { Connected: 3 }
 
 function formatLocalTime(utcIso) {
   return new Date(utcIso).toLocaleTimeString('es', {
@@ -29,14 +30,20 @@ export default function Reminders() {
   const [reminders, setReminders] = useState([])
   const [loading, setLoading] = useState(true)
   const [sentIds, setSentIds] = useState(new Set())
+  const [autoEnabled, setAutoEnabled] = useState(false)
 
   const load = useCallback(async () => {
     if (!business?.id) return
     setLoading(true)
     try {
-      const data = await getPendingWhatsAppReminders(business.id)
+      const [data, session] = await Promise.all([
+        getPendingWhatsAppReminders(business.id),
+        getWhatsAppSession(business.id).catch(() => null),
+      ])
       setReminders(data)
-      // Pre-mark already-sent ones
+      setAutoEnabled(
+        session?.status === WA_STATUS.Connected && session?.autoRemindersEnabled === true
+      )
       const alreadySent = new Set(data.filter((r) => r.whatsAppReminderSent).map((r) => r.appointmentId))
       setSentIds(alreadySent)
     } catch {
@@ -49,11 +56,8 @@ export default function Reminders() {
   useEffect(() => { load() }, [load])
 
   const handleSend = (reminder) => {
-    // Open WhatsApp in new tab
     window.open(reminder.whatsAppUrl, '_blank', 'noopener,noreferrer')
-    // Optimistic mark as sent
     setSentIds((prev) => new Set([...prev, reminder.appointmentId]))
-    // Persist to backend (fire-and-forget — doesn't block UX)
     markWhatsAppReminderSent(reminder.appointmentId, business.id).catch(() => {})
   }
 
@@ -74,16 +78,28 @@ export default function Reminders() {
       <div className="mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-xl sm:text-3xl font-bold text-gray-800">Recordatorios</h1>
-          {pending.length > 0 && (
+          {autoEnabled ? (
+            <span className="flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+              <WhatsAppIcon className="w-3.5 h-3.5" />
+              Enviando automáticamente
+            </span>
+          ) : pending.length > 0 ? (
             <span className="bg-green-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
               {pending.length} pendiente{pending.length !== 1 ? 's' : ''}
             </span>
-          )}
+          ) : null}
         </div>
         <p className="text-sm text-gray-500 mt-1">
           Citas de mañana ({tomorrowLabel()}) con número de WhatsApp
         </p>
       </div>
+
+      {autoEnabled && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-700">
+          La sesión de WhatsApp está conectada y los recordatorios se envían automáticamente.
+          Los botones manuales están disponibles como respaldo.
+        </div>
+      )}
 
       {loading ? (
         <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
@@ -99,21 +115,27 @@ export default function Reminders() {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Pending reminders */}
           {pending.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
-                <span className="text-sm font-semibold text-gray-700">Por enviar</span>
+                <span className="text-sm font-semibold text-gray-700">
+                  {autoEnabled ? 'Pendientes de envío automático' : 'Por enviar'}
+                </span>
               </div>
               <div className="divide-y divide-gray-100">
                 {pending.map((r) => (
-                  <ReminderRow key={r.appointmentId} reminder={r} onSend={handleSend} sent={false} />
+                  <ReminderRow
+                    key={r.appointmentId}
+                    reminder={r}
+                    onSend={handleSend}
+                    sent={false}
+                    autoEnabled={autoEnabled}
+                  />
                 ))}
               </div>
             </div>
           )}
 
-          {/* Already sent */}
           {sent.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
@@ -121,7 +143,13 @@ export default function Reminders() {
               </div>
               <div className="divide-y divide-gray-100 opacity-60">
                 {sent.map((r) => (
-                  <ReminderRow key={r.appointmentId} reminder={r} onSend={handleSend} sent />
+                  <ReminderRow
+                    key={r.appointmentId}
+                    reminder={r}
+                    onSend={handleSend}
+                    sent
+                    autoEnabled={autoEnabled}
+                  />
                 ))}
               </div>
             </div>
@@ -129,15 +157,17 @@ export default function Reminders() {
         </div>
       )}
 
-      <p className="text-xs text-gray-400 mt-6 text-center">
-        Al hacer clic en "Enviar WhatsApp" se abrirá la app con el mensaje listo.
-        Solo deberás presionar Enviar.
-      </p>
+      {!autoEnabled && (
+        <p className="text-xs text-gray-400 mt-6 text-center">
+          Al hacer clic en "Enviar WhatsApp" se abrirá la app con el mensaje listo.
+          Solo deberás presionar Enviar.
+        </p>
+      )}
     </div>
   )
 }
 
-function ReminderRow({ reminder, onSend, sent }) {
+function ReminderRow({ reminder, onSend, sent, autoEnabled }) {
   const initials = reminder.customerName
     .split(' ')
     .slice(0, 2)
@@ -148,7 +178,6 @@ function ReminderRow({ reminder, onSend, sent }) {
   return (
     <div className="flex items-center justify-between px-5 py-4 gap-3">
       <div className="flex items-center gap-3 min-w-0">
-        {/* Avatar */}
         <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
           {initials}
         </div>
@@ -174,14 +203,17 @@ function ReminderRow({ reminder, onSend, sent }) {
         )}
         <button
           onClick={() => onSend(reminder)}
+          title={autoEnabled && !sent ? 'Envío automático activo — click para enviar manualmente ahora' : undefined}
           className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${
             sent
               ? 'bg-gray-100 hover:bg-green-50 text-gray-500 hover:text-green-700'
-              : 'bg-green-500 hover:bg-green-600 text-white'
+              : autoEnabled
+                ? 'bg-gray-100 hover:bg-green-50 text-gray-500 hover:text-green-700'
+                : 'bg-green-500 hover:bg-green-600 text-white'
           }`}
         >
           <WhatsAppIcon className="w-4 h-4" />
-          <span>{sent ? 'Reenviar' : 'Enviar'}</span>
+          <span>{sent ? 'Reenviar' : autoEnabled ? 'Manual' : 'Enviar'}</span>
         </button>
       </div>
     </div>

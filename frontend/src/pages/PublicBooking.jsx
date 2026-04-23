@@ -248,6 +248,7 @@ export default function PublicBooking() {
         customerEmail: customerEmail.trim() || null,
         customerPhone: whatsAppConsent && customerPhone.trim() ? customerPhone.trim() : null,
         appointmentDate: selectedSlot.startTime,
+        whatsAppOptIn: whatsAppConsent && !!customerPhone.trim(),
       })
       navigate(`/book/${slug}/confirmed`, {
         state: {

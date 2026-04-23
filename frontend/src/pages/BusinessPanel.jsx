@@ -23,6 +23,7 @@ import {
   disconnectWhatsAppSession,
   updateWhatsAppSessionSettings,
   getWhatsAppQrBlobUrl,
+  sendWhatsAppTestMessage,
 } from '../api/client'
 import LocationPicker from '../components/LocationPicker'
 
@@ -895,6 +896,23 @@ const WA_STATUS = {
   Failed: 4,
 }
 
+const TZ_OPTIONS = [
+  { value: 'America/El_Salvador', label: 'El Salvador (UTC-6)' },
+  { value: 'America/Guatemala',   label: 'Guatemala (UTC-6)' },
+  { value: 'America/Costa_Rica',  label: 'Costa Rica (UTC-6)' },
+  { value: 'America/Tegucigalpa', label: 'Honduras (UTC-6)' },
+  { value: 'America/Managua',     label: 'Nicaragua (UTC-6)' },
+  { value: 'America/Panama',      label: 'Panamá (UTC-5)' },
+  { value: 'America/Bogota',      label: 'Colombia (UTC-5)' },
+  { value: 'America/Lima',        label: 'Perú (UTC-5)' },
+  { value: 'America/Mexico_City', label: 'México Ciudad (UTC-6)' },
+  { value: 'America/Caracas',     label: 'Venezuela (UTC-4)' },
+  { value: 'America/Sao_Paulo',   label: 'Brasil (UTC-3)' },
+  { value: 'America/Argentina/Buenos_Aires', label: 'Argentina (UTC-3)' },
+  { value: 'America/Santiago',    label: 'Chile (UTC-3/-4)' },
+  { value: 'UTC',                 label: 'UTC' },
+]
+
 function WhatsAppAutoTab() {
   const [session, setSession] = useState(null)
   const [qrUrl, setQrUrl] = useState(null)
@@ -902,6 +920,8 @@ function WhatsAppAutoTab() {
   const [working, setWorking] = useState(false)
   const [msg, setMsg] = useState({ type: '', text: '' })
   const [countdown, setCountdown] = useState(null)
+  const [testTo, setTestTo] = useState('')
+  const [testSending, setTestSending] = useState(false)
 
   const loadSession = async () => {
     try {
@@ -986,13 +1006,29 @@ function WhatsAppAutoTab() {
     }
   }
 
-  const handleToggleAuto = async (next) => {
+  const handleSendTest = async (e) => {
+    e.preventDefault()
+    if (!testTo.trim()) return
+    setTestSending(true)
+    setMsg({ type: '', text: '' })
+    try {
+      await sendWhatsAppTestMessage(testTo.trim(), 'Mensaje de prueba desde AgendaYa ✅')
+      setMsg({ type: 'success', text: `Mensaje de prueba enviado a ${testTo.trim()}` })
+      setTestTo('')
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setTestSending(false)
+    }
+  }
+
+  const handleToggleAuto = async (next, tz) => {
     setWorking(true)
     setMsg({ type: '', text: '' })
     try {
-      const data = await updateWhatsAppSessionSettings(next)
+      const data = await updateWhatsAppSessionSettings(next, tz)
       setSession(data)
-      setMsg({ type: 'success', text: next ? 'Recordatorios automáticos activados' : 'Recordatorios automáticos desactivados' })
+      setMsg({ type: 'success', text: tz ? 'Zona horaria guardada' : next ? 'Recordatorios automáticos activados' : 'Recordatorios automáticos desactivados' })
     } catch (err) {
       setMsg({ type: 'error', text: err.message })
     } finally {
@@ -1095,6 +1131,37 @@ function WhatsAppAutoTab() {
                 Enviar recordatorios automáticos a clientes con opt-in
               </span>
             </label>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 whitespace-nowrap">Zona horaria:</label>
+              <select
+                value={session.timeZoneId ?? 'America/El_Salvador'}
+                disabled={working}
+                onChange={(e) => handleToggleAuto(session.autoRemindersEnabled, e.target.value)}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-400"
+              >
+                {TZ_OPTIONS.map((tz) => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <form onSubmit={handleSendTest} className="flex items-center gap-2 pt-1">
+              <input
+                type="tel"
+                value={testTo}
+                onChange={(e) => setTestTo(e.target.value)}
+                placeholder="50378901234 (número completo)"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
+              />
+              <button
+                type="submit"
+                disabled={testSending || !testTo.trim()}
+                className="bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+              >
+                {testSending ? 'Enviando...' : 'Probar envío'}
+              </button>
+            </form>
 
             <button
               onClick={handleDisconnect}

@@ -212,10 +212,16 @@ export const startWhatsAppSession = () =>
 export const disconnectWhatsAppSession = () =>
   authRequest('/api/whatsapp-session', { method: 'DELETE' })
 
-export const updateWhatsAppSessionSettings = (autoRemindersEnabled) =>
+export const updateWhatsAppSessionSettings = (autoRemindersEnabled, timeZoneId) =>
   authRequest('/api/whatsapp-session', {
     method: 'PATCH',
-    body: JSON.stringify({ autoRemindersEnabled }),
+    body: JSON.stringify({ autoRemindersEnabled, timeZoneId: timeZoneId ?? null }),
+  })
+
+export const sendWhatsAppTestMessage = (to, body) =>
+  authRequest('/api/whatsapp-session/test', {
+    method: 'POST',
+    body: JSON.stringify({ to, body }),
   })
 
 export const getWhatsAppQrBlobUrl = async () => {
