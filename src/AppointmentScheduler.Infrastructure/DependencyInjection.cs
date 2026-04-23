@@ -54,6 +54,11 @@ public static class DependencyInjection
         services.AddScoped<AdminService>();
         services.AddScoped<BlockedDateService>();
         services.AddScoped<IEmailService, SmtpEmailService>();
+
+        // WhatsApp automation
+        services.Configure<WhatsAppOptions>(configuration.GetSection("WhatsApp"));
+        services.Configure<FeatureFlags>(configuration.GetSection("Features"));
+        services.AddHttpClient<IWhatsAppClient, WhatsAppClient>();
         services.AddScoped<AuthService>(sp =>
         {
             var userRepo = sp.GetRequiredService<IUserRepository>();
