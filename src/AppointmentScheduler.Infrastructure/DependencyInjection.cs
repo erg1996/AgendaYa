@@ -26,11 +26,6 @@ public static class DependencyInjection
             connStr = builder.ConnectionString;
         }
 
-        // Npgsql 6+ requires DateTimeKind.Utc for timestamptz columns by default.
-        // This app uses naive (Unspecified) DateTimes throughout; legacy mode restores
-        // the prior behaviour where Unspecified is treated as UTC for timestamptz.
-        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(connStr, npgsql =>
                 npgsql.EnableRetryOnFailure(maxRetryCount: 3)));
