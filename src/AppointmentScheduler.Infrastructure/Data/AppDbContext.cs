@@ -1,10 +1,25 @@
 using AppointmentScheduler.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AppointmentScheduler.Infrastructure.Data;
 
 public class AppDbContext : DbContext
 {
+    // Npgsql 8 removed the legacy timestamp AppContext switch and now always
+    // returns DateTimeKind.Utc from timestamptz columns. This converter makes
+    // EF Core transparently treat all DateTime values as UTC when reading/writing,
+    // so: (1) writes of Kind.Unspecified succeed, (2) LINQ query parameters are
+    // sent as UTC, and (3) reads return Unspecified — combined with
+    // NaiveDateTimeConverter the API never emits a Z suffix.
+    private static readonly ValueConverter<DateTime, DateTime> _utcConverter = new(
+        v => v.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v, DateTimeKind.Utc),
+        v => DateTime.SpecifyKind(v, DateTimeKind.Unspecified));
+
+    private static readonly ValueConverter<DateTime?, DateTime?> _utcConverterNullable = new(
+        v => v == null ? null : v.Value.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc),
+        v => v == null ? null : DateTime.SpecifyKind(v.Value, DateTimeKind.Unspecified));
+
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     public DbSet<Business> Businesses => Set<Business>();
@@ -156,5 +171,18 @@ public class AppDbContext : DbContext
                 .HasForeignKey(e => e.BusinessId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // Apply UTC converter to every DateTime/DateTime? property so Npgsql 8
+        // accepts all writes and EF Core sends UTC parameters in LINQ queries.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTime))
+                    property.SetValueConverter(_utcConverter);
+                else if (property.ClrType == typeof(DateTime?))
+                    property.SetValueConverter(_utcConverterNullable);
+            }
+        }
     }
 }
