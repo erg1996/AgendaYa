@@ -202,9 +202,9 @@ public class AppointmentService
                 appointment.CustomerName, business.Name, service.Name,
                 appointment.AppointmentDate, cancelUrl);
 
-            await _waClient.SendMessageAsync(
-                appointment.BusinessId, phone, body, appointment.Id.ToString(),
-                session.FirstConnectedAt, session.TimeZoneId);
+            // Booking confirmations are transactional — bypass the anti-ban queue
+            // so the customer receives the message within seconds, not minutes.
+            await _waClient.SendTestMessageAsync(appointment.BusinessId, phone, body);
         }
         catch (Exception ex)
         {
