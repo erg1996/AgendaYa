@@ -3,6 +3,8 @@ using AppointmentScheduler.Application.Exceptions;
 using AppointmentScheduler.Application.Interfaces;
 using AppointmentScheduler.Application.Services;
 using AppointmentScheduler.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AppointmentScheduler.Tests.Services;
@@ -14,6 +16,9 @@ public class AppointmentServiceTests
     private readonly Mock<IBusinessRepository> _businessRepo = new();
     private readonly Mock<IWorkingHoursRepository> _workingHoursRepo = new();
     private readonly Mock<IEmailService> _emailService = new();
+    private readonly Mock<IWhatsAppClient> _waClient = new();
+    private readonly Mock<IWhatsAppSessionRepository> _waSessionRepo = new();
+    private readonly Mock<IWhatsAppBlacklistRepository> _blacklistRepo = new();
     private readonly AppointmentActionOptions _actionOptions = new("test-secret-key-min-32-chars-long-123", "http://localhost");
     private readonly AppointmentService _sut;
 
@@ -28,7 +33,10 @@ public class AppointmentServiceTests
             _businessRepo.Object,
             _workingHoursRepo.Object,
             _emailService.Object,
-            _actionOptions);
+            _actionOptions,
+            _waClient.Object, _waSessionRepo.Object, _blacklistRepo.Object,
+            Options.Create(new FeatureFlags()),
+            NullLogger<AppointmentService>.Instance);
 
         // Default setup: business and service exist, working hours Mon 9-17
         _businessRepo.Setup(r => r.GetByIdAsync(_businessId))

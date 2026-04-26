@@ -29,14 +29,17 @@ public class WhatsAppClient : IWhatsAppClient
             _http.DefaultRequestHeaders.Remove("X-Internal-Secret");
             _http.DefaultRequestHeaders.Add("X-Internal-Secret", opts.InternalSecret);
         }
-        _http.Timeout = TimeSpan.FromSeconds(5);
+        // Per-request timeouts are applied via WithTimeout() helper.
+        // InfiniteTimeSpan disables the global limit so per-request tokens take effect.
+        _http.Timeout = Timeout.InfiniteTimeSpan;
     }
 
     public async Task<bool> PingAsync(CancellationToken ct = default)
     {
         try
         {
-            var res = await _http.GetAsync("ping", ct);
+            using var t = WithTimeout(ct, seconds: 10);
+            var res = await _http.GetAsync("ping", t.Token);
             return res.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -50,13 +53,14 @@ public class WhatsAppClient : IWhatsAppClient
     {
         try
         {
-            var res = await _http.PostAsync($"sessions/{businessId}/start", content: null, ct);
+            using var t = WithTimeout(ct, seconds: 10);
+            var res = await _http.PostAsync($"sessions/{businessId}/start", content: null, t.Token);
             if (!res.IsSuccessStatusCode)
             {
                 _logger.LogWarning("WhatsApp start session returned {Status} for {BusinessId}", res.StatusCode, businessId);
                 return null;
             }
-            var payload = await res.Content.ReadFromJsonAsync<StartSessionResponse>(cancellationToken: ct);
+            var payload = await res.Content.ReadFromJsonAsync<StartSessionResponse>(cancellationToken: t.Token);
             if (payload is null) return null;
             return new StartSessionResult(ParseStatus(payload.status), payload.lastError);
         }
@@ -71,10 +75,11 @@ public class WhatsAppClient : IWhatsAppClient
     {
         try
         {
-            var res = await _http.GetAsync($"sessions/{businessId}/status", ct);
+            using var t = WithTimeout(ct, seconds: 10);
+            var res = await _http.GetAsync($"sessions/{businessId}/status", t.Token);
             if (res.StatusCode == HttpStatusCode.NotFound) return null;
             if (!res.IsSuccessStatusCode) return null;
-            var payload = await res.Content.ReadFromJsonAsync<StatusResponse>(cancellationToken: ct);
+            var payload = await res.Content.ReadFromJsonAsync<StatusResponse>(cancellationToken: t.Token);
             if (payload is null) return null;
             return new WhatsAppSessionStatusDto(
                 ParseStatus(payload.status),
@@ -95,9 +100,10 @@ public class WhatsAppClient : IWhatsAppClient
     {
         try
         {
-            var res = await _http.GetAsync($"sessions/{businessId}/qr", ct);
+            using var t = WithTimeout(ct, seconds: 10);
+            var res = await _http.GetAsync($"sessions/{businessId}/qr", t.Token);
             if (!res.IsSuccessStatusCode) return null;
-            return await res.Content.ReadAsByteArrayAsync(ct);
+            return await res.Content.ReadAsByteArrayAsync(t.Token);
         }
         catch (Exception ex)
         {
@@ -110,7 +116,8 @@ public class WhatsAppClient : IWhatsAppClient
     {
         try
         {
-            var res = await _http.DeleteAsync($"sessions/{businessId}", ct);
+            using var t = WithTimeout(ct, seconds: 10);
+            var res = await _http.DeleteAsync($"sessions/{businessId}", t.Token);
             return res.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -125,8 +132,11 @@ public class WhatsAppClient : IWhatsAppClient
     {
         try
         {
+            // Rate limiter enforces 45-120s inter-message delays + typing indicator;
+            // allow 3 minutes per message so queued sends don't timeout.
+            using var t = WithTimeout(ct, seconds: 180);
             var payload = new { to = toPhone, body, appointmentId, firstConnectedAt, timeZoneId };
-            var res = await _http.PostAsJsonAsync($"sessions/{businessId}/send", payload, ct);
+            var res = await _http.PostAsJsonAsync($"sessions/{businessId}/send", payload, t.Token);
             return res.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -140,8 +150,9 @@ public class WhatsAppClient : IWhatsAppClient
     {
         try
         {
+            using var t = WithTimeout(ct, seconds: 15);
             var payload = new { to = toPhone, body };
-            var res = await _http.PostAsJsonAsync($"sessions/{businessId}/send-test", payload, ct);
+            var res = await _http.PostAsJsonAsync($"sessions/{businessId}/send-test", payload, t.Token);
             return res.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -149,6 +160,13 @@ public class WhatsAppClient : IWhatsAppClient
             _logger.LogWarning(ex, "WhatsApp send test message failed for {BusinessId}", businessId);
             return false;
         }
+    }
+
+    private static CancellationTokenSource WithTimeout(CancellationToken ct, int seconds)
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(seconds));
+        return cts;
     }
 
     private static WhatsAppSessionStatus ParseStatus(string? raw) => raw?.ToLowerInvariant() switch

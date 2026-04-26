@@ -1,19 +1,15 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import QRCode from 'qrcode';
-import baileys from '@whiskeysockets/baileys';
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+} from '@whiskeysockets/baileys';
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { notifyDotnet } from './webhook.js';
 import { getLimiter, removeLimiter } from './ratelimit.js';
-
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion,
-  proto,
-} = baileys;
 
 const BAJA_KEYWORDS = ['baja', 'stop', 'unsubscribe', 'cancelar', 'no more', 'no quiero'];
 
@@ -44,6 +40,7 @@ function createRecord(businessId) {
     qrExpiresAt: 0,
     sock: null,
     starting: false,
+    _reconnectAttempts: 0,
   };
 }
 
@@ -149,18 +146,46 @@ export async function startSession(businessId) {
         s.lastConnectedAt = new Date().toISOString();
         s.qrPng = null;
         s.qrExpiresAt = 0;
+        s._reconnectAttempts = 0;
         await setStatus(s, 'connected');
       } else if (connection === 'close') {
         const code = lastDisconnect?.error?.output?.statusCode;
-        const loggedOut = code === DisconnectReason.loggedOut;
-        s.lastError = lastDisconnect?.error?.message || `code ${code}`;
+        const loggedOut    = code === DisconnectReason.loggedOut;
+        const replaced     = code === DisconnectReason.connectionReplaced;
+        const shouldReconnect = code === DisconnectReason.restartRequired
+          || code === DisconnectReason.connectionClosed
+          || code === DisconnectReason.connectionLost
+          || code === DisconnectReason.timedOut;
         s.qrPng = null;
         s.qrExpiresAt = 0;
         if (loggedOut) {
           await removeAuth(businessId);
           await setStatus(s, 'disconnected');
           sessions.delete(businessId);
+        } else if (replaced) {
+          // Another WhatsApp Web session opened — not an error, just disconnected
+          s.lastError = 'session replaced by another device';
+          await setStatus(s, 'disconnected');
+          sessions.delete(businessId);
+        } else if (shouldReconnect) {
+          const attempt = ++s._reconnectAttempts;
+          // Close the dead socket so its listeners don't fire against the new one
+          try { s.sock.end(undefined); } catch { /* ignore */ }
+          s.sock = null;
+          if (attempt > 5) {
+            s.lastError = `reconnect failed after ${attempt} attempts`;
+            s._reconnectAttempts = 0;
+            await setStatus(s, 'failed');
+          } else {
+            const delayMs = Math.min(2_000 * 2 ** (attempt - 1), 60_000); // 2s 4s 8s 16s 32s
+            logger.info({ businessId, code, attempt, delayMs }, 'transient disconnect — reconnecting');
+            // Reset so startSession() doesn't early-return on s.status === 'connected'
+            s.status = 'starting';
+            s.starting = false;
+            setTimeout(() => startSession(businessId), delayMs);
+          }
         } else {
+          s.lastError = lastDisconnect?.error?.message || `code ${code}`;
           await setStatus(s, 'failed');
         }
       }
@@ -265,7 +290,7 @@ export async function sendTestMessage(businessId, phone, body) {
   const jid = `${phone.replace(/\D/g, '')}@s.whatsapp.net`;
   try {
     await s.sock.sendPresenceUpdate('composing', jid);
-    await sleep(3_000);
+    await sleep(1_500);
     await s.sock.sendMessage(jid, { text: body });
     return { ok: true };
   } catch (err) {

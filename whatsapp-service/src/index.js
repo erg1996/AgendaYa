@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import express from 'express';
 import { config } from './config.js';
 import { logger } from './logger.js';
@@ -10,6 +12,24 @@ import {
   sendMessage,
   sendTestMessage,
 } from './sessions.js';
+
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+async function recoverSessions() {
+  try {
+    const entries = await fs.readdir(config.sessionsDir, { withFileTypes: true });
+    const ids = entries
+      .filter(e => e.isDirectory() && UUID_RE.test(e.name))
+      .map(e => e.name);
+    if (ids.length === 0) return;
+    logger.info({ count: ids.length }, 'recovering sessions from disk');
+    await Promise.all(ids.map(id => startSession(id).catch(err =>
+      logger.warn({ err: err.message, id }, 'failed to recover session')
+    )));
+  } catch (err) {
+    logger.warn({ err: err.message }, 'recoverSessions skipped');
+  }
+}
 
 const app = express();
 app.disable('x-powered-by');
@@ -94,6 +114,7 @@ app.use((err, _req, res, _next) => {
 
 const server = app.listen(config.port, () => {
   logger.info({ port: config.port, env: config.nodeEnv }, 'whatsapp-service listening');
+  recoverSessions();
 });
 
 function shutdown(signal) {

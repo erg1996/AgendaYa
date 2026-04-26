@@ -1,4 +1,5 @@
 import { logger } from './logger.js';
+import { notifyDotnet } from './webhook.js';
 
 // Anti-ban send queue per session.
 // Enforces: warm-up daily limits, 20/hr max, 45-120s inter-message delays,
@@ -160,10 +161,16 @@ class RateLimiter {
         this._sentHour++;
         this._sentDay++;
         this._lastSent.set(task.phone, Date.now());
-        this._recentFailures = []; // reset on success
+        this._recentFailures = [];
+        if (task.appointmentId) {
+          notifyDotnet('message.delivered', this.businessId, { appointmentId: task.appointmentId }).catch(() => {});
+        }
         task.resolve({ ok: true });
       } catch (err) {
         this.recordFailure();
+        if (task.appointmentId) {
+          notifyDotnet('message.failed', this.businessId, { appointmentId: task.appointmentId }).catch(() => {});
+        }
         task.reject(err);
       }
 

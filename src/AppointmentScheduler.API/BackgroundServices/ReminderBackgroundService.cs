@@ -141,6 +141,9 @@ public class ReminderBackgroundService : BackgroundService
                 {
                     await appointmentRepo.MarkWhatsAppReminderFailedAsync(a.Id);
                     _logger.LogWarning("WhatsApp send failed for appointment {Id}", a.Id);
+                    // Poison the cache entry so we skip remaining appointments for this
+                    // business this run rather than claiming + failing them individually.
+                    sessionCache![a.BusinessId] = new WhatsAppSession { Status = WhatsAppSessionStatus.Disconnected };
                 }
             }
             catch (Exception ex)

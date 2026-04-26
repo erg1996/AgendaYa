@@ -42,20 +42,11 @@ public class AvailabilityService
 
         var existingAppointments = await _appointmentRepository.GetByBusinessIdAndDateAsync(businessId, date);
 
-        var slots = GenerateAvailableSlots(
+        return GenerateAvailableSlots(
             date.Date,
             workingHoursList[0],
             service.DurationMinutes,
             existingAppointments);
-
-        // Filter out past slots if requesting today
-        var now = DateTime.UtcNow;
-        if (date.Date == now.Date)
-        {
-            slots = slots.Where(s => s.StartTime > now).ToList();
-        }
-
-        return slots;
     }
 
     /// <summary>

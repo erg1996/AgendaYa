@@ -3,6 +3,8 @@ using AppointmentScheduler.Application.Exceptions;
 using AppointmentScheduler.Application.Interfaces;
 using AppointmentScheduler.Application.Utils;
 using AppointmentScheduler.Domain.Entities;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AppointmentScheduler.Application.Services;
 
@@ -14,6 +16,11 @@ public class AppointmentService
     private readonly IWorkingHoursRepository _workingHoursRepository;
     private readonly IEmailService _emailService;
     private readonly AppointmentActionOptions _actionOptions;
+    private readonly IWhatsAppClient _waClient;
+    private readonly IWhatsAppSessionRepository _waSessionRepo;
+    private readonly IWhatsAppBlacklistRepository _blacklistRepo;
+    private readonly FeatureFlags _features;
+    private readonly ILogger<AppointmentService> _logger;
 
     public AppointmentService(
         IAppointmentRepository appointmentRepository,
@@ -21,7 +28,12 @@ public class AppointmentService
         IBusinessRepository businessRepository,
         IWorkingHoursRepository workingHoursRepository,
         IEmailService emailService,
-        AppointmentActionOptions actionOptions)
+        AppointmentActionOptions actionOptions,
+        IWhatsAppClient waClient,
+        IWhatsAppSessionRepository waSessionRepo,
+        IWhatsAppBlacklistRepository blacklistRepo,
+        IOptions<FeatureFlags> features,
+        ILogger<AppointmentService> logger)
     {
         _appointmentRepository = appointmentRepository;
         _serviceRepository = serviceRepository;
@@ -29,6 +41,11 @@ public class AppointmentService
         _workingHoursRepository = workingHoursRepository;
         _emailService = emailService;
         _actionOptions = actionOptions;
+        _waClient = waClient;
+        _waSessionRepo = waSessionRepo;
+        _blacklistRepo = blacklistRepo;
+        _features = features.Value;
+        _logger = logger;
     }
 
     public async Task<AppointmentResponse> CreateAsync(CreateAppointmentRequest request)
@@ -89,6 +106,12 @@ public class AppointmentService
                 appointment.DurationMinutes,
                 business.BrandColor,
                 business.LogoUrl);
+        }
+
+        // Send WhatsApp confirmation (fire-and-forget, only if session is connected)
+        if (_features.WhatsAppAutomation && appointment.WhatsAppOptIn && !string.IsNullOrEmpty(appointment.CustomerPhone))
+        {
+            _ = SendWhatsAppConfirmationAsync(appointment, business, service);
         }
 
         return ToResponse(appointment);
@@ -157,6 +180,36 @@ public class AppointmentService
             var url = WhatsAppTemplateRenderer.BuildWaUrl(phone, message);
             return new PendingReminderResponse(a.Id, a.CustomerName, a.CustomerPhone!, a.AppointmentDate, a.Service.Name, a.Business.Name, url, a.WhatsAppReminderSent);
         }).ToList();
+    }
+
+    private async Task SendWhatsAppConfirmationAsync(Appointment appointment, Business business, Domain.Entities.Service service)
+    {
+        try
+        {
+            var phone = PhoneNormalizer.NormalizeForWaMe(appointment.CustomerPhone!);
+            if (phone is null) return;
+
+            var session = await _waSessionRepo.GetByBusinessIdAsync(appointment.BusinessId);
+            if (session is null || session.Status != WhatsAppSessionStatus.Connected) return;
+
+            var isBlocked = await _blacklistRepo.IsBlockedAsync(appointment.BusinessId, phone);
+            if (isBlocked) return;
+
+            var cancelUrl = BuildActionUrl(appointment.Id, AppointmentAction.Cancel,
+                DateTimeOffset.UtcNow.AddHours(72));
+
+            var body = WhatsAppTemplateRenderer.RenderConfirmation(
+                appointment.CustomerName, business.Name, service.Name,
+                appointment.AppointmentDate, cancelUrl);
+
+            await _waClient.SendMessageAsync(
+                appointment.BusinessId, phone, body, appointment.Id.ToString(),
+                session.FirstConnectedAt, session.TimeZoneId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WhatsApp confirmation failed for appointment {Id}", appointment.Id);
+        }
     }
 
     private string BuildActionUrl(Guid appointmentId, AppointmentAction action, DateTimeOffset expires)

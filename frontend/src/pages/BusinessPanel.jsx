@@ -575,7 +575,7 @@ function WorkingHoursTab({ businessId }) {
 
   const handleDelete = async (id) => {
     try {
-      await deleteWorkingHours(id)
+      await deleteWorkingHours(id, businessId)
       loadHours()
     } catch (err) {
       setMessage({ type: 'error', text: err.message })
@@ -1073,7 +1073,16 @@ function WhatsAppAutoTab() {
         )}
 
         {status === WA_STATUS.Starting && (
-          <p className="text-sm text-gray-500 py-4">Iniciando sesión, generando código QR...</p>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500 py-2">Iniciando sesión, generando código QR...</p>
+            <button
+              onClick={handleDisconnect}
+              disabled={working}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          </div>
         )}
 
         {status === WA_STATUS.WaitingQr && (

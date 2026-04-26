@@ -2,6 +2,8 @@ using AppointmentScheduler.Application.Interfaces;
 using AppointmentScheduler.Application.Services;
 using AppointmentScheduler.Application.Utils;
 using AppointmentScheduler.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AppointmentScheduler.Tests.Services;
@@ -15,13 +17,19 @@ public class AppointmentActionFlowTests
     private readonly Mock<IBusinessRepository> _bizRepo = new();
     private readonly Mock<IWorkingHoursRepository> _whRepo = new();
     private readonly Mock<IEmailService> _email = new();
+    private readonly Mock<IWhatsAppClient> _waClient = new();
+    private readonly Mock<IWhatsAppSessionRepository> _waSessionRepo = new();
+    private readonly Mock<IWhatsAppBlacklistRepository> _blacklistRepo = new();
     private readonly AppointmentService _sut;
 
     public AppointmentActionFlowTests()
     {
         _sut = new AppointmentService(
             _apptRepo.Object, _svcRepo.Object, _bizRepo.Object, _whRepo.Object, _email.Object,
-            new AppointmentActionOptions(Secret, "http://localhost"));
+            new AppointmentActionOptions(Secret, "http://localhost"),
+            _waClient.Object, _waSessionRepo.Object, _blacklistRepo.Object,
+            Options.Create(new FeatureFlags()),
+            NullLogger<AppointmentService>.Instance);
     }
 
     private Appointment MakeAppointment(AppointmentStatus status)

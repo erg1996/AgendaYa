@@ -224,7 +224,8 @@ export default function PublicBooking() {
     setSelectedSlot(null)
     try {
       const data = await getAvailability(business.id, d, selectedService.id)
-      setSlots(data)
+      const now = new Date()
+      setSlots(data.filter(s => new Date(s.startTime) > now))
     } catch {
       setSlots([])
     } finally {

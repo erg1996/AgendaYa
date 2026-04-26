@@ -57,6 +57,25 @@ public static class WhatsAppTemplateRenderer
             .Replace("{cancelar_url}", cancelUrl ?? "");
     }
 
+    private const string ConfirmationTemplate =
+        "Hola {cliente} ✅\n\n¡Tu cita en *{negocio}* ha sido reservada!\n\n📅 {fecha}\n🕐 {hora}\n💈 {servicio}\n\nSi necesitas cancelar: {cancelar_url}\n\n¡Te esperamos! 🙌";
+
+    public static string RenderConfirmation(
+        string customerName,
+        string businessName,
+        string serviceName,
+        DateTime appointmentDate,
+        string cancelUrl)
+    {
+        return ConfirmationTemplate
+            .Replace("{cliente}", customerName)
+            .Replace("{negocio}", businessName)
+            .Replace("{servicio}", serviceName)
+            .Replace("{fecha}", appointmentDate.ToString("dddd d 'de' MMMM", EsCulture))
+            .Replace("{hora}", appointmentDate.ToString("h:mm tt", CultureInfo.InvariantCulture).ToUpper())
+            .Replace("{cancelar_url}", cancelUrl);
+    }
+
     public static string BuildWaUrl(string phoneDigitsOnly, string message) =>
         $"https://wa.me/{phoneDigitsOnly}?text={Uri.EscapeDataString(message)}";
 }

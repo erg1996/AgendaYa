@@ -11,3 +11,8 @@ appsettings.Development.json
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# WhatsApp service
+whatsapp-service/node_modules/
+whatsapp-service/data/
+whatsapp-service/.env

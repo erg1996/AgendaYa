@@ -53,8 +53,10 @@ export default function BookAppointment() {
     setSlots([])
     try {
       const data = await getAvailability(business.id, date, serviceId)
-      setSlots(data)
-      if (data.length === 0) setSlotsError('No hay horarios disponibles para esta fecha')
+      const now = new Date()
+      const filtered = data.filter(s => new Date(s.startTime) > now)
+      setSlots(filtered)
+      if (filtered.length === 0) setSlotsError('No hay horarios disponibles para esta fecha')
     } catch (err) {
       setSlotsError(err.message)
     } finally {
