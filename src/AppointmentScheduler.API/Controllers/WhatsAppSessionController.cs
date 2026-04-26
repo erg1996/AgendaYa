@@ -2,6 +2,7 @@ using System.Security.Claims;
 using AppointmentScheduler.Application.DTOs;
 using AppointmentScheduler.Application.Interfaces;
 using AppointmentScheduler.Application.Services;
+using AppointmentScheduler.Application.Utils;
 using AppointmentScheduler.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -149,9 +150,13 @@ public class WhatsAppSessionController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.To))
             return BadRequest(new { error = "to required" });
 
-        var ok = await _whatsapp.SendTestMessageAsync(ctx.BusinessId, request.To.Trim(), request.Body ?? "Hola desde AgendaYa - mensaje de prueba", ct);
+        var normalizedPhone = PhoneNormalizer.NormalizeForWaMe(request.To.Trim());
+        if (normalizedPhone is null)
+            return BadRequest(new { error = "invalid_phone", detail = "Ingresa un número de El Salvador (8 dígitos) o con código +503." });
+
+        var ok = await _whatsapp.SendTestMessageAsync(ctx.BusinessId, normalizedPhone, request.Body ?? "Hola desde AgendaYa - mensaje de prueba", ct);
         if (!ok) return StatusCode(502, new { error = "send_failed" });
-        return Ok(new { sent = true });
+        return Ok(new { sent = true, to = normalizedPhone });
     }
 
     [HttpPatch]
