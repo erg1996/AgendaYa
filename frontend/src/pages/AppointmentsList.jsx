@@ -174,7 +174,7 @@ export default function AppointmentsList() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  {['Cliente', 'Servicio', 'Fecha', 'Hora', 'Estado', 'Notas', 'Acciones'].map((h) => (
+                  {['Cliente', 'Servicio', 'Empleado', 'Fecha', 'Hora', 'Estado', 'Notas', 'Acciones'].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -184,6 +184,16 @@ export default function AppointmentsList() {
                   <tr key={a.id} className="hover:bg-gray-50 transition-colors group">
                     <td className="px-4 py-3 font-medium text-gray-900">{a.customerName}</td>
                     <td className="px-4 py-3 text-gray-500 max-w-[140px] truncate">{getServiceName(a.serviceId)}</td>
+                    <td className="px-4 py-3">
+                      {a.employeeName ? (
+                        <span className="flex items-center gap-1.5 text-gray-700">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: a.employeeColor ?? '#6366f1' }} />
+                          <span className="text-sm">{a.employeeName}</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(a.appointmentDate)}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatTime(a.appointmentDate)} — {formatTime(a.endTime)}</td>
                     <td className="px-4 py-3">{statusBadge(a.status)}</td>

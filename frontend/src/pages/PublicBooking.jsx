@@ -172,9 +172,13 @@ export default function PublicBooking() {
   const [step, setStep] = useState(1)
   const [selectedService, setSelectedService] = useState(null)
   const [date, setDate] = useState('')
+  const [allSlots, setAllSlots] = useState([])
   const [slots, setSlots] = useState([])
+  const [employeeOptions, setEmployeeOptions] = useState([])
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState(null)
+  const [selectedEmployeeForSlot, setSelectedEmployeeForSlot] = useState(null)
   const [customerName, setCustomerName] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -211,8 +215,27 @@ export default function PublicBooking() {
     setSelectedService(svc)
     setStep(2)
     setSelectedSlot(null)
+    setAllSlots([])
     setSlots([])
     setDate('')
+    setEmployeeOptions([])
+    setSelectedEmployeeId(null)
+  }
+
+  const filterSlots = (raw, empId, d) => {
+    const today = todayDateKey()
+    let filtered = empId
+      ? raw.filter(s => s.availableEmployees?.some(e => e.id === empId))
+      : raw
+    if (d === today) {
+      const now = new Date()
+      const nowHm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      filtered = filtered.filter(s => {
+        const m = String(s.startTime).match(/T(\d{2}:\d{2})/)
+        return m ? m[1] > nowHm : true
+      })
+    }
+    return filtered
   }
 
   const handleDateChange = async (d) => {
@@ -222,30 +245,35 @@ export default function PublicBooking() {
     setSelectedSlot(null)
     try {
       const data = await getAvailability(business.id, d, selectedService.id)
-      // The slot's startTime is wall-clock El Salvador. Compare wall-clock-to-
-      // wall-clock against the device's local "now" so the cutoff works the same
-      // regardless of browser TZ — we only filter past slots when the chosen day
-      // is today; future days never need filtering.
-      const today = todayDateKey()
-      if (d > today) {
-        setSlots(data)
-      } else {
-        const now = new Date()
-        const nowHm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-        setSlots(data.filter(s => {
-          const m = String(s.startTime).match(/T(\d{2}:\d{2})/)
-          return m ? m[1] > nowHm : true
-        }))
-      }
+      setAllSlots(data)
+      // Collect unique employees across all slots
+      const empMap = new Map()
+      data.forEach(s => s.availableEmployees?.forEach(e => empMap.set(e.id, e)))
+      setEmployeeOptions([...empMap.values()])
+      setSlots(filterSlots(data, selectedEmployeeId, d))
     } catch {
+      setAllSlots([])
       setSlots([])
     } finally {
       setLoadingSlots(false)
     }
   }
 
+  const handleEmployeeSelect = (empId) => {
+    setSelectedEmployeeId(empId)
+    setSlots(filterSlots(allSlots, empId, date))
+    setSelectedSlot(null)
+  }
+
   const selectSlot = (slot) => {
     setSelectedSlot(slot)
+    // Determine which employee handles this slot
+    const emp = selectedEmployeeId
+      ? slot.availableEmployees?.find(e => e.id === selectedEmployeeId) ?? null
+      : slot.availableEmployees?.length === 1
+        ? slot.availableEmployees[0]
+        : null
+    setSelectedEmployeeForSlot(emp)
     setStep(3)
   }
 
@@ -262,6 +290,7 @@ export default function PublicBooking() {
       await createAppointment({
         businessId: business.id,
         serviceId: selectedService.id,
+        employeeId: selectedEmployeeId ?? null,
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim() || null,
         customerPhone: whatsAppConsent && customerPhone.trim() ? customerPhone.trim() : null,
@@ -520,6 +549,38 @@ export default function PublicBooking() {
               </div>
             )}
 
+            {!loadingSlots && employeeOptions.length > 1 && (
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">
+                  ¿Con quién?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleEmployeeSelect(null)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                    style={selectedEmployeeId === null
+                      ? { background: brand, color: onBrand, borderColor: brand }
+                      : { background: 'white', color: '#6b7280', borderColor: '#d1d5db' }}
+                  >
+                    Cualquier empleado
+                  </button>
+                  {employeeOptions.map(emp => (
+                    <button
+                      key={emp.id}
+                      onClick={() => handleEmployeeSelect(emp.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                      style={selectedEmployeeId === emp.id
+                        ? { background: brand, color: onBrand, borderColor: brand }
+                        : { background: 'white', color: '#374151', borderColor: '#d1d5db' }}
+                    >
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: emp.color ?? '#6366f1' }} />
+                      {emp.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {!loadingSlots && slots.length > 0 && (
               <div className="space-y-3">
                 {morningSlots.length > 0 && (
@@ -602,6 +663,15 @@ export default function PublicBooking() {
                     {fmtTime(selectedSlot.startTime)} — {fmtTime(selectedSlot.endTime)}
                   </span>
                 </div>
+                {selectedEmployeeForSlot && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Con</span>
+                    <span className="flex items-center gap-1.5 font-medium text-gray-900">
+                      <span className="w-2 h-2 rounded-full" style={{ background: selectedEmployeeForSlot.color ?? '#6366f1' }} />
+                      {selectedEmployeeForSlot.name}
+                    </span>
+                  </div>
+                )}
                 {fmtPrice(selectedService.price) && (
                   <div className="flex justify-between text-sm border-t border-gray-100 pt-2 mt-2">
                     <span className="text-gray-500">Total</span>

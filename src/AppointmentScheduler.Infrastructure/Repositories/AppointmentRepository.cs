@@ -37,6 +37,13 @@ public class AppointmentRepository : IAppointmentRepository
             .Where(a => a.BusinessId == businessId && a.AppointmentDate.Date == date.Date)
             .ToListAsync();
 
+    public async Task<List<Appointment>> GetByEmployeeIdAndDateAsync(Guid employeeId, DateTime date) =>
+        await _context.Appointments
+            .Where(a => a.EmployeeId == employeeId
+                     && a.AppointmentDate.Date == date.Date
+                     && a.Status != AppointmentStatus.Cancelled)
+            .ToListAsync();
+
     public async Task<List<Appointment>> GetByBusinessIdAndDateRangeAsync(Guid businessId, DateTime from, DateTime to) =>
         await _context.Appointments
             .Where(a => a.BusinessId == businessId && a.AppointmentDate >= from && a.AppointmentDate < to)
@@ -137,7 +144,7 @@ public class AppointmentRepository : IAppointmentRepository
             var dayEnd = dayStart.AddDays(1);
 
             var conflict = await _context.Appointments
-                .Where(a => a.BusinessId == appointment.BusinessId
+                .Where(a => a.EmployeeId == appointment.EmployeeId
                          && a.Status != AppointmentStatus.Cancelled
                          && a.AppointmentDate >= dayStart
                          && a.AppointmentDate < dayEnd)

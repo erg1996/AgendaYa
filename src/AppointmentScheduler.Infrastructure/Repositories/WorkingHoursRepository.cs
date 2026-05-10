@@ -11,15 +11,17 @@ public class WorkingHoursRepository : IWorkingHoursRepository
 
     public WorkingHoursRepository(AppDbContext context) => _context = context;
 
-    public async Task<List<WorkingHours>> GetByBusinessIdAsync(Guid businessId) =>
+    public async Task<List<WorkingHours>> GetByEmployeeIdAsync(Guid employeeId) =>
         await _context.WorkingHours
-            .Where(wh => wh.BusinessId == businessId)
+            .Where(wh => wh.EmployeeId == employeeId)
             .OrderBy(wh => wh.DayOfWeek)
+            .ThenBy(wh => wh.StartTime)
             .ToListAsync();
 
-    public async Task<List<WorkingHours>> GetByBusinessIdAndDayAsync(Guid businessId, int dayOfWeek) =>
+    public async Task<List<WorkingHours>> GetByEmployeeIdAndDayAsync(Guid employeeId, int dayOfWeek) =>
         await _context.WorkingHours
-            .Where(wh => wh.BusinessId == businessId && wh.DayOfWeek == dayOfWeek)
+            .Where(wh => wh.EmployeeId == employeeId && wh.DayOfWeek == dayOfWeek)
+            .OrderBy(wh => wh.StartTime)
             .ToListAsync();
 
     public async Task<WorkingHours?> GetByIdAsync(Guid id) =>

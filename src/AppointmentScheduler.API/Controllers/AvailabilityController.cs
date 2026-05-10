@@ -15,9 +15,10 @@ public class AvailabilityController : ControllerBase
     public async Task<IActionResult> GetAvailability(
         [FromQuery] Guid businessId,
         [FromQuery] DateTime date,
-        [FromQuery] Guid serviceId)
+        [FromQuery] Guid serviceId,
+        [FromQuery] Guid? employeeId = null)
     {
-        var slots = await _service.GetAvailableSlotsAsync(businessId, date, serviceId);
+        var slots = await _service.GetAvailableSlotsAsync(businessId, date, serviceId, employeeId);
         return Ok(slots);
     }
 }

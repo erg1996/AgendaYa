@@ -229,7 +229,7 @@ export default function CalendarView() {
                             className={`absolute left-0.5 right-0.5 rounded-lg border text-left px-1.5 py-0.5 overflow-hidden transition-all ${colorClass} ${
                               isSelected ? 'shadow-md ring-2 ring-indigo-400 z-10' : 'hover:shadow-sm z-0'
                             }`}
-                            style={{ top: `${top}px`, height: `${heightPx}px` }}
+                            style={{ top: `${top}px`, height: `${heightPx}px`, borderLeftColor: a.employeeColor ?? undefined, borderLeftWidth: a.employeeColor ? '3px' : undefined }}
                           >
                             <div className="text-xs font-semibold leading-tight truncate">{a.customerName}</div>
                             {heightPx > 30 && <div className="text-xs opacity-70 truncate">{getServiceName(a.serviceId)}</div>}
@@ -253,6 +253,12 @@ export default function CalendarView() {
             <div>
               <h3 className="font-bold text-gray-900 text-lg">{selectedAppt.customerName}</h3>
               <p className="text-gray-500 text-sm">{getServiceName(selectedAppt.serviceId)} · {selectedAppt.durationMinutes} min</p>
+              {selectedAppt.employeeName && (
+                <p className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
+                  <span className="w-2 h-2 rounded-full" style={{ background: selectedAppt.employeeColor ?? '#6366f1' }} />
+                  {selectedAppt.employeeName}
+                </p>
+              )}
             </div>
             <button onClick={() => setSelectedAppt(null)} aria-label="Cerrar" className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all">
               <XIcon className="w-5 h-5" />

@@ -11,39 +11,39 @@ namespace AppointmentScheduler.API.Controllers;
 [Authorize]
 public class WorkingHoursController : ControllerBase
 {
-    private readonly WorkingHoursService _service;
+    private readonly EmployeeManagementService _service;
     private readonly BusinessService _businessService;
 
-    public WorkingHoursController(WorkingHoursService service, BusinessService businessService)
+    public WorkingHoursController(EmployeeManagementService service, BusinessService businessService)
     {
         _service = service;
         _businessService = businessService;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetByBusinessId([FromQuery] Guid businessId)
+    public async Task<IActionResult> GetByEmployeeId([FromQuery] Guid employeeId, [FromQuery] Guid businessId)
     {
         var userId = User.GetUserId();
         await _businessService.ValidateOwnershipAsync(userId, businessId);
-        var results = await _service.GetByBusinessIdAsync(businessId);
+        var results = await _service.GetWorkingHoursAsync(employeeId, businessId);
         return Ok(results);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateWorkingHoursRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateWorkingHoursRequest request, [FromQuery] Guid businessId)
     {
         var userId = User.GetUserId();
-        await _businessService.ValidateOwnershipAsync(userId, request.BusinessId);
-        var result = await _service.CreateAsync(request);
+        await _businessService.ValidateOwnershipAsync(userId, businessId);
+        var result = await _service.AddWorkingHoursAsync(request.EmployeeId, businessId, request);
         return Created($"/api/working-hours/{result.Id}", result);
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] CreateWorkingHoursRequest request)
+    public async Task<IActionResult> Update(Guid id, [FromBody] CreateWorkingHoursRequest request, [FromQuery] Guid businessId)
     {
         var userId = User.GetUserId();
-        await _businessService.ValidateOwnershipAsync(userId, request.BusinessId);
-        var result = await _service.UpdateAsync(id, request);
+        await _businessService.ValidateOwnershipAsync(userId, businessId);
+        var result = await _service.UpdateWorkingHoursAsync(id, businessId, request);
         return Ok(result);
     }
 
@@ -52,7 +52,7 @@ public class WorkingHoursController : ControllerBase
     {
         var userId = User.GetUserId();
         await _businessService.ValidateOwnershipAsync(userId, businessId);
-        await _service.DeleteAsync(id);
+        await _service.DeleteWorkingHoursAsync(id, businessId);
         return NoContent();
     }
 }

@@ -29,6 +29,8 @@ public class AppDbContext : DbContext
     public DbSet<BlockedDate> BlockedDates => Set<BlockedDate>();
     public DbSet<User> Users => Set<User>();
     public DbSet<UserBusiness> UserBusinesses => Set<UserBusiness>();
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeeServiceLink> EmployeeServiceLinks => Set<EmployeeServiceLink>();
     public DbSet<WhatsAppMessageTemplate> WhatsAppMessageTemplates => Set<WhatsAppMessageTemplate>();
     public DbSet<WhatsAppSession> WhatsAppSessions => Set<WhatsAppSession>();
     public DbSet<WhatsAppBlacklist> WhatsAppBlacklists => Set<WhatsAppBlacklist>();
@@ -61,6 +63,34 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<Employee>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Color).IsRequired().HasMaxLength(20).HasDefaultValue("#6366f1");
+            entity.Property(e => e.AvatarUrl).HasMaxLength(500);
+            entity.Property(e => e.CommissionPercent).HasColumnType("decimal(5,2)").HasDefaultValue(100m);
+            entity.HasIndex(e => e.BusinessId);
+            entity.HasOne(e => e.Business)
+                .WithMany(b => b.Employees)
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmployeeServiceLink>(entity =>
+        {
+            entity.HasKey(e => new { e.EmployeeId, e.ServiceId });
+            entity.Property(e => e.OverridePrice).HasColumnType("decimal(10,2)");
+            entity.HasOne(e => e.Employee)
+                .WithMany(emp => emp.EmployeeServices)
+                .HasForeignKey(e => e.EmployeeId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<Appointment>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -75,6 +105,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.WhatsAppOptIn).HasDefaultValue(false);
             entity.Ignore(e => e.EndTime);
             entity.HasIndex(e => new { e.BusinessId, e.AppointmentDate });
+            entity.HasIndex(e => new { e.EmployeeId, e.AppointmentDate });
             entity.HasIndex(e => e.ServiceId);
             entity.HasOne(e => e.Business)
                 .WithMany(b => b.Appointments)
@@ -84,15 +115,20 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ServiceId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Employee)
+                .WithMany(emp => emp.Appointments)
+                .HasForeignKey(e => e.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<WorkingHours>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => new { e.BusinessId, e.DayOfWeek }).IsUnique();
-            entity.HasOne(e => e.Business)
-                .WithMany(b => b.WorkingHours)
-                .HasForeignKey(e => e.BusinessId)
+            // Multiple rows per employee per day are allowed (split shifts).
+            entity.HasIndex(e => new { e.EmployeeId, e.DayOfWeek });
+            entity.HasOne(e => e.Employee)
+                .WithMany(emp => emp.WorkingHours)
+                .HasForeignKey(e => e.EmployeeId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

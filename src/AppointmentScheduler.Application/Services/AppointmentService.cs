@@ -15,6 +15,7 @@ public class AppointmentService
     private readonly IServiceRepository _serviceRepository;
     private readonly IBusinessRepository _businessRepository;
     private readonly IWorkingHoursRepository _workingHoursRepository;
+    private readonly IEmployeeRepository _employeeRepository;
     private readonly IEmailService _emailService;
     private readonly AppointmentActionOptions _actionOptions;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -26,6 +27,7 @@ public class AppointmentService
         IServiceRepository serviceRepository,
         IBusinessRepository businessRepository,
         IWorkingHoursRepository workingHoursRepository,
+        IEmployeeRepository employeeRepository,
         IEmailService emailService,
         AppointmentActionOptions actionOptions,
         IServiceScopeFactory scopeFactory,
@@ -36,6 +38,7 @@ public class AppointmentService
         _serviceRepository = serviceRepository;
         _businessRepository = businessRepository;
         _workingHoursRepository = workingHoursRepository;
+        _employeeRepository = employeeRepository;
         _emailService = emailService;
         _actionOptions = actionOptions;
         _scopeFactory = scopeFactory;
@@ -51,21 +54,24 @@ public class AppointmentService
         var service = await _serviceRepository.GetByIdAsync(request.ServiceId)
             ?? throw new NotFoundException($"Service with id '{request.ServiceId}' not found.");
 
+        // Resolve which employee handles this appointment.
+        var (employee, effectiveDuration) = await ResolveEmployeeAsync(request, service);
+
         var appointmentDate = request.AppointmentDate;
-        var endTime = appointmentDate.AddMinutes(service.DurationMinutes);
+        var endTime = appointmentDate.AddMinutes(effectiveDuration);
 
-        // Validate within working hours
+        // Validate slot falls within the employee's working hours for that day.
         int dayOfWeek = (int)appointmentDate.DayOfWeek;
-        var workingHoursList = await _workingHoursRepository.GetByBusinessIdAndDayAsync(request.BusinessId, dayOfWeek);
+        var workRanges = await _workingHoursRepository.GetByEmployeeIdAndDayAsync(employee.Id, dayOfWeek);
 
-        if (workingHoursList.Count == 0)
-            throw new ConflictException("The business is closed on the requested day.");
+        if (workRanges.Count == 0)
+            throw new ConflictException("The employee has no working hours on the requested day.");
 
-        var wh = workingHoursList[0];
-        var dayStart = appointmentDate.Date + wh.StartTime;
-        var dayEnd = appointmentDate.Date + wh.EndTime;
+        bool withinHours = workRanges.Any(wh =>
+            appointmentDate >= appointmentDate.Date + wh.StartTime &&
+            endTime <= appointmentDate.Date + wh.EndTime);
 
-        if (appointmentDate < dayStart || endTime > dayEnd)
+        if (!withinHours)
             throw new ConflictException("The appointment falls outside of working hours.");
 
         var appointment = new Appointment
@@ -73,23 +79,24 @@ public class AppointmentService
             Id = Guid.NewGuid(),
             BusinessId = request.BusinessId,
             ServiceId = request.ServiceId,
+            EmployeeId = employee.Id,
             CustomerName = request.CustomerName.Trim(),
             CustomerEmail = request.CustomerEmail?.Trim(),
             CustomerPhone = request.CustomerPhone?.Trim(),
             AppointmentDate = appointmentDate,
-            DurationMinutes = service.DurationMinutes,
+            DurationMinutes = effectiveDuration,
             Status = AppointmentStatus.Pending,
             WhatsAppOptIn = request.WhatsAppOptIn && !string.IsNullOrEmpty(request.CustomerPhone),
             CreatedAt = DateTime.UtcNow
         };
 
-        // Atomic overlap check + insert under a serializable transaction so two
-        // concurrent bookings cannot both win the same slot.
+        // Atomic overlap check + insert under serializable tx (now per-employee).
         var created = await _appointmentRepository.TryCreateWithOverlapCheckAsync(appointment);
         if (!created)
             throw new ConflictException("The requested time slot conflicts with an existing appointment.");
 
-        // Send confirmation email (fire-and-forget)
+        appointment.Employee = employee;
+
         if (!string.IsNullOrWhiteSpace(appointment.CustomerEmail))
         {
             _ = _emailService.SendAppointmentConfirmationAsync(
@@ -103,12 +110,8 @@ public class AppointmentService
                 business.LogoUrl);
         }
 
-        // Send WhatsApp confirmation (fire-and-forget, only if session is connected)
         if (_features.WhatsAppAutomation && appointment.WhatsAppOptIn && !string.IsNullOrEmpty(appointment.CustomerPhone))
         {
-            // Snapshot the data the background task needs — the request scope (and
-            // its DbContext + scoped HttpClient) will be disposed when this method
-            // returns, so the fire-and-forget must use a fresh scope.
             var snapshot = new WhatsAppConfirmationSnapshot(
                 appointment.Id, appointment.BusinessId, appointment.CustomerName,
                 appointment.CustomerPhone!, appointment.AppointmentDate,
@@ -116,7 +119,37 @@ public class AppointmentService
             _ = Task.Run(() => SendWhatsAppConfirmationAsync(snapshot));
         }
 
-        return ToResponse(appointment);
+        return ToResponse(appointment, employee);
+    }
+
+    // Returns (employee, effectiveDurationMinutes). If employeeId not specified,
+    // picks the first active employee who offers the service.
+    private async Task<(Employee, int)> ResolveEmployeeAsync(CreateAppointmentRequest request, Domain.Entities.Service service)
+    {
+        if (request.EmployeeId.HasValue)
+        {
+            var emp = await _employeeRepository.GetByIdWithServicesAsync(request.EmployeeId.Value)
+                ?? throw new NotFoundException($"Employee '{request.EmployeeId.Value}' not found.");
+
+            if (emp.BusinessId != request.BusinessId)
+                throw new ForbiddenException("Employee does not belong to this business.");
+
+            if (!emp.IsActive)
+                throw new ConflictException("The selected employee is not active.");
+
+            var link = emp.EmployeeServices.FirstOrDefault(es => es.ServiceId == request.ServiceId)
+                ?? throw new ConflictException("The selected employee does not offer this service.");
+
+            return (emp, link.OverrideDurationMinutes ?? service.DurationMinutes);
+        }
+
+        // "Any employee" — pick the first active employee who offers this service.
+        var employees = await _employeeRepository.GetByBusinessIdWithServicesAsync(request.BusinessId);
+        var candidate = employees.FirstOrDefault(e => e.EmployeeServices.Any(es => es.ServiceId == request.ServiceId))
+            ?? throw new ConflictException("No active employee offers this service.");
+
+        var candidateLink = candidate.EmployeeServices.First(es => es.ServiceId == request.ServiceId);
+        return (candidate, candidateLink.OverrideDurationMinutes ?? service.DurationMinutes);
     }
 
     private record WhatsAppConfirmationSnapshot(
@@ -130,7 +163,18 @@ public class AppointmentService
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var (appointments, total) = await _appointmentRepository.GetPaginatedByBusinessIdAsync(businessId, page, pageSize);
-        var items = appointments.Select(ToResponse).ToList();
+
+        // Hydrate employee names/colors in bulk.
+        var empIds = appointments.Select(a => a.EmployeeId).Distinct().ToList();
+        var empMap = (await _employeeRepository.GetByBusinessIdAsync(businessId, includeInactive: true))
+            .Where(e => empIds.Contains(e.Id))
+            .ToDictionary(e => e.Id);
+
+        var items = appointments.Select(a =>
+        {
+            empMap.TryGetValue(a.EmployeeId, out var emp);
+            return ToResponse(a, emp);
+        }).ToList();
         return new PaginatedResponse<AppointmentResponse>(items, total, page, pageSize);
     }
 
@@ -327,7 +371,7 @@ public class AppointmentService
         return (from, to);
     }
 
-    private static AppointmentResponse ToResponse(Appointment a)
+    private static AppointmentResponse ToResponse(Appointment a, Employee? emp = null)
     {
         var effectiveStatus = a.Status;
         if ((a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed)
@@ -336,7 +380,10 @@ public class AppointmentService
             effectiveStatus = AppointmentStatus.Completed;
         }
 
-        return new(a.Id, a.BusinessId, a.ServiceId, a.CustomerName, a.CustomerEmail, a.CustomerPhone,
+        var employee = emp ?? a.Employee;
+        return new(a.Id, a.BusinessId, a.ServiceId, a.EmployeeId,
+            employee?.Name, employee?.Color,
+            a.CustomerName, a.CustomerEmail, a.CustomerPhone,
             a.AppointmentDate, a.DurationMinutes, a.EndTime, effectiveStatus.ToString(), a.Notes,
             a.WhatsAppReminderSent, a.CreatedAt);
     }

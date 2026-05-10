@@ -23,6 +23,7 @@ public interface IAppointmentRepository
     Task<List<Appointment>> GetByBusinessIdAsync(Guid businessId);
     Task<(List<Appointment> Items, int Total)> GetPaginatedByBusinessIdAsync(Guid businessId, int page, int pageSize);
     Task<List<Appointment>> GetByBusinessIdAndDateAsync(Guid businessId, DateTime date);
+    Task<List<Appointment>> GetByEmployeeIdAndDateAsync(Guid employeeId, DateTime date);
     Task<List<Appointment>> GetUpcomingForRemindersAsync(DateTime from, DateTime to);
     Task<List<Appointment>> GetByBusinessIdAndDateRangeAsync(Guid businessId, DateTime from, DateTime to);
     Task<List<Appointment>> GetPendingWhatsAppRemindersByBusinessAsync(Guid businessId, DateTime from, DateTime to);

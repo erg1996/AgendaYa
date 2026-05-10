@@ -119,11 +119,42 @@ export const createBlockedDate = (data) =>
 export const deleteBlockedDate = (id, businessId) =>
   authRequest(`/api/blocked-dates/${id}?businessId=${businessId}`, { method: 'DELETE' })
 
+// ─── Employees ───────────────────────────────────────────────────────────────
+export const getEmployees = (businessId, includeInactive = false) =>
+  authRequest(`/api/employees?businessId=${businessId}&includeInactive=${includeInactive}`)
+
+export const createEmployee = (data) =>
+  authRequest('/api/employees', { method: 'POST', body: JSON.stringify(data) })
+
+export const updateEmployee = (id, businessId, data) =>
+  authRequest(`/api/employees/${id}?businessId=${businessId}`, { method: 'PUT', body: JSON.stringify(data) })
+
+export const getEmployeeWorkingHours = (employeeId, businessId) =>
+  authRequest(`/api/employees/${employeeId}/working-hours?businessId=${businessId}`)
+
+export const addEmployeeWorkingHours = (employeeId, businessId, data) =>
+  authRequest(`/api/employees/${employeeId}/working-hours?businessId=${businessId}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const updateEmployeeWorkingHours = (employeeId, whId, businessId, data) =>
+  authRequest(`/api/employees/${employeeId}/working-hours/${whId}?businessId=${businessId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+
+export const deleteEmployeeWorkingHours = (employeeId, whId, businessId) =>
+  authRequest(`/api/employees/${employeeId}/working-hours/${whId}?businessId=${businessId}`, {
+    method: 'DELETE',
+  })
+
 // ─── Availability (public) ────────────────────────────────────────────────────
-export const getAvailability = (businessId, date, serviceId) =>
-  publicRequest(
-    `/api/availability?businessId=${businessId}&date=${encodeURIComponent(date)}&serviceId=${serviceId}`
-  )
+export const getAvailability = (businessId, date, serviceId, employeeId = null) => {
+  const params = new URLSearchParams({ businessId, date, serviceId })
+  if (employeeId) params.set('employeeId', employeeId)
+  return publicRequest(`/api/availability?${params}`)
+}
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const register = (data) =>

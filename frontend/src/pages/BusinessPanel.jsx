@@ -4,10 +4,6 @@ import {
   createBusiness,
   createService,
   deleteService,
-  createWorkingHours,
-  getWorkingHours,
-  updateWorkingHours,
-  deleteWorkingHours,
   getBlockedDates,
   createBlockedDate,
   deleteBlockedDate,
@@ -24,6 +20,13 @@ import {
   updateWhatsAppSessionSettings,
   getWhatsAppQrBlobUrl,
   sendWhatsAppTestMessage,
+  getEmployees,
+  createEmployee,
+  updateEmployee,
+  getEmployeeWorkingHours,
+  addEmployeeWorkingHours,
+  updateEmployeeWorkingHours,
+  deleteEmployeeWorkingHours,
 } from '../api/client'
 import LocationPicker from '../components/LocationPicker'
 
@@ -53,7 +56,7 @@ export default function BusinessPanel() {
   const tabs = [
     { key: 'info', label: 'Negocio' },
     { key: 'services', label: 'Servicios' },
-    { key: 'hours', label: 'Horarios' },
+    { key: 'team', label: 'Equipo' },
     { key: 'blocked', label: 'Dias Bloqueados' },
     { key: 'whatsapp', label: 'WhatsApp' },
     ...(autoWhatsAppEnabled ? [{ key: 'whatsappAuto', label: 'Automatización WA' }] : []),
@@ -99,7 +102,7 @@ export default function BusinessPanel() {
           onRefresh={refreshServices}
         />
       )}
-      {tab === 'hours' && <WorkingHoursTab businessId={business.id} />}
+      {tab === 'team' && <EmployeesTab businessId={business.id} services={services} />}
       {tab === 'blocked' && <BlockedDatesTab businessId={business.id} />}
       {tab === 'whatsapp' && <WhatsAppTab business={business} />}
       {tab === 'whatsappAuto' && <WhatsAppAutoTab />}
@@ -499,75 +502,294 @@ function ServicesTab({ businessId, services, onRefresh }) {
   )
 }
 
-function WorkingHoursTab({ businessId }) {
+function EmployeesTab({ businessId, services }) {
+  const [employees, setEmployees] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState(null)
+  const [showCreate, setShowCreate] = useState(false)
+
+  useEffect(() => { loadEmployees() }, [businessId])
+
+  const loadEmployees = async () => {
+    try {
+      const data = await getEmployees(businessId, true)
+      setEmployees(data)
+    } catch {} finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) return <p className="text-center text-gray-400 py-12">Cargando equipo...</p>
+
+  return (
+    <div className="space-y-4">
+      {employees.map((emp) => (
+        <EmployeeCard
+          key={emp.id}
+          employee={emp}
+          businessId={businessId}
+          services={services}
+          expanded={expandedId === emp.id}
+          onToggle={() => setExpandedId(expandedId === emp.id ? null : emp.id)}
+          onRefresh={loadEmployees}
+        />
+      ))}
+
+      {showCreate ? (
+        <CreateEmployeeForm
+          businessId={businessId}
+          onCreated={() => { setShowCreate(false); loadEmployees() }}
+          onCancel={() => setShowCreate(false)}
+        />
+      ) : (
+        <button
+          onClick={() => setShowCreate(true)}
+          className="w-full border-2 border-dashed border-gray-300 rounded-xl p-4 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors text-sm font-medium"
+        >
+          + Agregar empleado
+        </button>
+      )}
+    </div>
+  )
+}
+
+function EmployeeCard({ employee: emp, businessId, services, expanded, onToggle, onRefresh }) {
+  const [editMode, setEditMode] = useState(false)
+  const [name, setName] = useState(emp.name)
+  const [color, setColor] = useState(emp.color ?? '#6366f1')
+  const [isActive, setIsActive] = useState(emp.isActive)
+  const [commissionPercent, setCommissionPercent] = useState(emp.commissionPercent ?? 100)
+  const [empServices, setEmpServices] = useState(
+    emp.services.map((s) => ({ serviceId: s.serviceId, overridePrice: s.overridePrice ?? '', overrideDurationMinutes: s.overrideDurationMinutes ?? '' }))
+  )
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState({ type: '', text: '' })
+
+  const toggleService = (svcId) => {
+    setEmpServices((prev) =>
+      prev.some((s) => s.serviceId === svcId)
+        ? prev.filter((s) => s.serviceId !== svcId)
+        : [...prev, { serviceId: svcId, overridePrice: '', overrideDurationMinutes: '' }]
+    )
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setMsg({ type: '', text: '' })
+    try {
+      await updateEmployee(emp.id, businessId, {
+        name: name.trim(),
+        color,
+        isActive,
+        displayOrder: emp.displayOrder,
+        commissionPercent: Number(commissionPercent),
+        services: empServices.map((s) => ({
+          serviceId: s.serviceId,
+          overridePrice: s.overridePrice !== '' ? Number(s.overridePrice) : null,
+          overrideDurationMinutes: s.overrideDurationMinutes !== '' ? Number(s.overrideDurationMinutes) : null,
+        })),
+      })
+      setMsg({ type: 'success', text: 'Guardado' })
+      setEditMode(false)
+      onRefresh()
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: emp.color ?? '#6366f1' }} />
+          <div>
+            <span className="font-medium text-gray-900">{emp.name}</span>
+            {!emp.isActive && (
+              <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactivo</span>
+            )}
+            <p className="text-xs text-gray-400 mt-0.5">
+              {emp.services.length === 0 ? 'Sin servicios' : emp.services.map((s) => s.serviceName).join(', ')}
+            </p>
+          </div>
+        </div>
+        <span className="text-gray-400 text-sm">{expanded ? '▲' : '▼'}</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-100 px-5 py-4 space-y-5">
+          {editMode ? (
+            <div className="space-y-4">
+              <div className="flex gap-4 flex-wrap items-end">
+                <div className="flex-1 min-w-[160px]">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Color</label>
+                  <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
+                    className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-1" />
+                </div>
+                <div className="w-28">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Comisión %</label>
+                  <input
+                    type="number" min="0" max="100" step="1"
+                    value={commissionPercent}
+                    onChange={(e) => setCommissionPercent(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded" />
+                  <span className="text-sm text-gray-700">Activo</span>
+                </label>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-2">Servicios que ofrece</p>
+                <div className="space-y-2">
+                  {services.map((svc) => {
+                    const linked = empServices.find((s) => s.serviceId === svc.id)
+                    return (
+                      <div key={svc.id} className="flex items-center gap-3 flex-wrap">
+                        <label className="flex items-center gap-2 cursor-pointer min-w-[180px]">
+                          <input type="checkbox" checked={!!linked}
+                            onChange={() => toggleService(svc.id)}
+                            className="w-4 h-4 text-indigo-600 rounded" />
+                          <span className="text-sm text-gray-800">{svc.name}</span>
+                          <span className="text-xs text-gray-400">{svc.durationMinutes}min</span>
+                        </label>
+                        {linked && (
+                          <>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-gray-400">Precio:</span>
+                              <input
+                                type="number" placeholder={svc.price ?? '—'} min="0" step="0.01"
+                                value={linked.overridePrice}
+                                onChange={(e) => setEmpServices((prev) =>
+                                  prev.map((s) => s.serviceId === svc.id ? { ...s, overridePrice: e.target.value } : s)
+                                )}
+                                className="w-20 border border-gray-200 rounded px-2 py-1 text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-gray-400">Duración:</span>
+                              <input
+                                type="number" placeholder={svc.durationMinutes} min="5" step="5"
+                                value={linked.overrideDurationMinutes}
+                                onChange={(e) => setEmpServices((prev) =>
+                                  prev.map((s) => s.serviceId === svc.id ? { ...s, overrideDurationMinutes: e.target.value } : s)
+                                )}
+                                className="w-16 border border-gray-200 rounded px-2 py-1 text-xs"
+                              />
+                              <span className="text-xs text-gray-400">min</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {msg.text && (
+                <p className={`text-sm ${msg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>
+              )}
+              <div className="flex gap-3">
+                <button onClick={handleSave} disabled={saving}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                  {saving ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+                <button onClick={() => { setEditMode(false); setMsg({ type: '', text: '' }) }}
+                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors">Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">Comisión:</span> {emp.commissionPercent}%
+              </div>
+              <button onClick={() => setEditMode(true)}
+                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                Editar información
+              </button>
+            </div>
+          )}
+
+          <EmployeeWorkingHours employeeId={emp.id} businessId={businessId} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EmployeeWorkingHours({ employeeId, businessId }) {
+  const [hours, setHours] = useState([])
   const [day, setDay] = useState(1)
   const [start, setStart] = useState('09:00')
   const [end, setEnd] = useState('17:00')
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState({ type: '', text: '' })
-  const [hours, setHours] = useState([])
   const [editingId, setEditingId] = useState(null)
   const [editStart, setEditStart] = useState('')
   const [editEnd, setEditEnd] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState({ type: '', text: '' })
 
-  useEffect(() => {
-    loadHours()
-  }, [businessId])
+  useEffect(() => { loadHours() }, [employeeId])
 
   const loadHours = async () => {
     try {
-      const data = await getWorkingHours(businessId)
+      const data = await getEmployeeWorkingHours(employeeId, businessId)
       setHours(data)
     } catch {}
   }
 
-  const formatTime = (ts) => {
-    // ts comes as "HH:mm:ss" or similar
-    const parts = ts.split(':')
-    return `${parts[0]}:${parts[1]}`
-  }
+  const fmtTime = (ts) => { const p = ts.split(':'); return `${p[0]}:${p[1]}` }
+  const toTimeStr = (t) => { const [h, m] = t.split(':').map(Number); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00` }
 
-  const usedDays = hours.map((h) => h.dayOfWeek)
-
-  const handleSubmit = async (e) => {
+  const handleAdd = async (e) => {
     e.preventDefault()
     setLoading(true)
-    setMessage({ type: '', text: '' })
+    setMsg({ type: '', text: '' })
     try {
-      const [sh, sm] = start.split(':').map(Number)
-      const [eh, em] = end.split(':').map(Number)
-      await createWorkingHours({
-        businessId,
+      await addEmployeeWorkingHours(employeeId, businessId, {
+        employeeId,
         dayOfWeek: Number(day),
-        startTime: `${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')}:00`,
-        endTime: `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}:00`,
+        startTime: toTimeStr(start),
+        endTime: toTimeStr(end),
       })
-      setMessage({ type: 'success', text: `Horario de ${DAY_NAMES[day]} guardado` })
+      setMsg({ type: 'success', text: `Horario de ${DAY_NAMES[day]} agregado` })
       loadHours()
     } catch (err) {
-      setMessage({ type: 'error', text: err.message })
+      setMsg({ type: 'error', text: err.message })
     } finally {
       setLoading(false)
     }
   }
 
-  const handleUpdate = async (id, dayOfWeek) => {
+  const handleUpdate = async (wh) => {
     setLoading(true)
-    setMessage({ type: '', text: '' })
+    setMsg({ type: '', text: '' })
     try {
-      const [sh, sm] = editStart.split(':').map(Number)
-      const [eh, em] = editEnd.split(':').map(Number)
-      await updateWorkingHours(id, {
-        businessId,
-        dayOfWeek,
-        startTime: `${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')}:00`,
-        endTime: `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}:00`,
+      await updateEmployeeWorkingHours(employeeId, wh.id, businessId, {
+        employeeId,
+        dayOfWeek: wh.dayOfWeek,
+        startTime: toTimeStr(editStart),
+        endTime: toTimeStr(editEnd),
       })
       setEditingId(null)
-      setMessage({ type: 'success', text: 'Horario actualizado' })
+      setMsg({ type: 'success', text: 'Horario actualizado' })
       loadHours()
     } catch (err) {
-      setMessage({ type: 'error', text: err.message })
+      setMsg({ type: 'error', text: err.message })
     } finally {
       setLoading(false)
     }
@@ -575,108 +797,119 @@ function WorkingHoursTab({ businessId }) {
 
   const handleDelete = async (id) => {
     try {
-      await deleteWorkingHours(id, businessId)
+      await deleteEmployeeWorkingHours(employeeId, id, businessId)
       loadHours()
     } catch (err) {
-      setMessage({ type: 'error', text: err.message })
+      setMsg({ type: 'error', text: err.message })
     }
   }
 
-  const startEdit = (h) => {
-    setEditingId(h.id)
-    setEditStart(formatTime(h.startTime))
-    setEditEnd(formatTime(h.endTime))
+  return (
+    <div className="border-t border-gray-100 pt-4">
+      <h3 className="text-sm font-medium text-gray-700 mb-3">Horarios laborales</h3>
+
+      {hours.length > 0 && (
+        <div className="divide-y divide-gray-100 mb-3">
+          {hours.map((h) => (
+            <div key={h.id} className="flex items-center justify-between py-2">
+              <span className="text-sm text-gray-700 w-24">{DAY_NAMES[h.dayOfWeek]}</span>
+              {editingId === h.id ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input type="time" value={editStart} onChange={(e) => setEditStart(e.target.value)}
+                    className="border border-gray-300 rounded px-2 py-1 text-sm" />
+                  <span className="text-gray-400">—</span>
+                  <input type="time" value={editEnd} onChange={(e) => setEditEnd(e.target.value)}
+                    className="border border-gray-300 rounded px-2 py-1 text-sm" />
+                  <button onClick={() => handleUpdate(h)} className="text-green-600 hover:text-green-800 text-xs font-medium">Guardar</button>
+                  <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600 text-xs">Cancelar</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500">{fmtTime(h.startTime)} — {fmtTime(h.endTime)}</span>
+                  <button onClick={() => { setEditingId(h.id); setEditStart(fmtTime(h.startTime)); setEditEnd(fmtTime(h.endTime)) }}
+                    className="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Editar</button>
+                  <button onClick={() => handleDelete(h.id)}
+                    className="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={handleAdd} className="flex gap-2 items-end flex-wrap">
+        <div className="w-36">
+          <select value={day} onChange={(e) => setDay(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+            {DAY_NAMES.map((n, i) => <option key={i} value={i}>{n}</option>)}
+          </select>
+        </div>
+        <input type="time" value={start} onChange={(e) => setStart(e.target.value)}
+          className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)}
+          className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+        <button type="submit" disabled={loading}
+          className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+          + Agregar
+        </button>
+      </form>
+
+      {msg.text && (
+        <p className={`text-xs mt-2 ${msg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>
+      )}
+    </div>
+  )
+}
+
+function CreateEmployeeForm({ businessId, onCreated, onCancel }) {
+  const [name, setName] = useState('')
+  const [color, setColor] = useState('#6366f1')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    setLoading(true)
+    setError('')
+    try {
+      await createEmployee({ businessId, name: name.trim(), color })
+      onCreated()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-800 mb-4">Agregar Horario Laboral</h2>
-        <form onSubmit={handleSubmit} className="flex gap-3 items-end flex-wrap">
-          <div className="w-44">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Día</label>
-            <select
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            >
-              {DAY_NAMES.map((name, i) => (
-                <option key={i} value={i} disabled={usedDays.includes(i)}>
-                  {name} {usedDays.includes(i) ? '(ya configurado)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="w-32">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Apertura</label>
-            <input
-              type="time"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            />
-          </div>
-          <div className="w-32">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cierre</label>
-            <input
-              type="time"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading || usedDays.includes(Number(day))}
-            className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-          >
-            {loading ? '...' : 'Agregar'}
-          </button>
-        </form>
-        {message.text && (
-          <p className={`text-sm mt-3 ${message.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-            {message.text}
-          </p>
-        )}
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-800 mb-4">Horarios Configurados ({hours.length})</h2>
-        {hours.length === 0 ? (
-          <p className="text-gray-400 text-center py-4">No hay horarios configurados</p>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {hours.map((h) => (
-              <div key={h.id} className="flex items-center justify-between py-3">
-                <span className="font-medium text-gray-800 w-28">{DAY_NAMES[h.dayOfWeek]}</span>
-                {editingId === h.id ? (
-                  <div className="flex items-center gap-2">
-                    <input type="time" value={editStart} onChange={(e) => setEditStart(e.target.value)}
-                      className="border border-gray-300 rounded px-2 py-1 text-sm" />
-                    <span className="text-gray-400">—</span>
-                    <input type="time" value={editEnd} onChange={(e) => setEditEnd(e.target.value)}
-                      className="border border-gray-300 rounded px-2 py-1 text-sm" />
-                    <button onClick={() => handleUpdate(h.id, h.dayOfWeek)}
-                      className="text-green-600 hover:text-green-800 text-sm font-medium">Guardar</button>
-                    <button onClick={() => setEditingId(null)}
-                      className="text-gray-400 hover:text-gray-600 text-sm">Cancelar</button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-500">
-                      {formatTime(h.startTime)} — {formatTime(h.endTime)}
-                    </span>
-                    <button onClick={() => startEdit(h)}
-                      className="text-indigo-600 hover:text-indigo-800 text-sm font-medium">Editar</button>
-                    <button onClick={() => handleDelete(h.id)}
-                      className="text-red-500 hover:text-red-700 text-sm font-medium">Eliminar</button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+    <div className="bg-white rounded-xl border-2 border-indigo-200 p-5">
+      <h3 className="font-semibold text-gray-800 mb-3">Nuevo empleado</h3>
+      <form onSubmit={handleSubmit} className="flex gap-3 items-end flex-wrap">
+        <div className="flex-1 min-w-[160px]">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ej: María López"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Color</label>
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
+            className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-1" />
+        </div>
+        <button type="submit" disabled={loading || !name.trim()}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+          {loading ? 'Creando...' : 'Crear'}
+        </button>
+        <button type="button" onClick={onCancel}
+          className="text-sm text-gray-500 hover:text-gray-700 transition-colors py-2">
+          Cancelar
+        </button>
+      </form>
+      {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
     </div>
   )
 }
