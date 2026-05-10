@@ -3,6 +3,7 @@ using AppointmentScheduler.Application.Exceptions;
 using AppointmentScheduler.Application.Interfaces;
 using AppointmentScheduler.Application.Utils;
 using AppointmentScheduler.Domain.Entities;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -16,9 +17,7 @@ public class AppointmentService
     private readonly IWorkingHoursRepository _workingHoursRepository;
     private readonly IEmailService _emailService;
     private readonly AppointmentActionOptions _actionOptions;
-    private readonly IWhatsAppClient _waClient;
-    private readonly IWhatsAppSessionRepository _waSessionRepo;
-    private readonly IWhatsAppBlacklistRepository _blacklistRepo;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly FeatureFlags _features;
     private readonly ILogger<AppointmentService> _logger;
 
@@ -29,9 +28,7 @@ public class AppointmentService
         IWorkingHoursRepository workingHoursRepository,
         IEmailService emailService,
         AppointmentActionOptions actionOptions,
-        IWhatsAppClient waClient,
-        IWhatsAppSessionRepository waSessionRepo,
-        IWhatsAppBlacklistRepository blacklistRepo,
+        IServiceScopeFactory scopeFactory,
         IOptions<FeatureFlags> features,
         ILogger<AppointmentService> logger)
     {
@@ -41,9 +38,7 @@ public class AppointmentService
         _workingHoursRepository = workingHoursRepository;
         _emailService = emailService;
         _actionOptions = actionOptions;
-        _waClient = waClient;
-        _waSessionRepo = waSessionRepo;
-        _blacklistRepo = blacklistRepo;
+        _scopeFactory = scopeFactory;
         _features = features.Value;
         _logger = logger;
     }
@@ -111,11 +106,23 @@ public class AppointmentService
         // Send WhatsApp confirmation (fire-and-forget, only if session is connected)
         if (_features.WhatsAppAutomation && appointment.WhatsAppOptIn && !string.IsNullOrEmpty(appointment.CustomerPhone))
         {
-            _ = SendWhatsAppConfirmationAsync(appointment, business, service);
+            // Snapshot the data the background task needs — the request scope (and
+            // its DbContext + scoped HttpClient) will be disposed when this method
+            // returns, so the fire-and-forget must use a fresh scope.
+            var snapshot = new WhatsAppConfirmationSnapshot(
+                appointment.Id, appointment.BusinessId, appointment.CustomerName,
+                appointment.CustomerPhone!, appointment.AppointmentDate,
+                business.Name, service.Name);
+            _ = Task.Run(() => SendWhatsAppConfirmationAsync(snapshot));
         }
 
         return ToResponse(appointment);
     }
+
+    private record WhatsAppConfirmationSnapshot(
+        Guid AppointmentId, Guid BusinessId, string CustomerName,
+        string CustomerPhone, DateTime AppointmentDate,
+        string BusinessName, string ServiceName);
 
     public async Task<PaginatedResponse<AppointmentResponse>> GetByBusinessIdAsync(Guid businessId, int page = 1, int pageSize = 50)
     {
@@ -182,33 +189,66 @@ public class AppointmentService
         }).ToList();
     }
 
-    private async Task SendWhatsAppConfirmationAsync(Appointment appointment, Business business, Domain.Entities.Service service)
+    private async Task SendWhatsAppConfirmationAsync(WhatsAppConfirmationSnapshot snapshot)
     {
+        // The original request scope is gone by the time this runs — resolve every
+        // dependency from a fresh scope so DbContext / typed HttpClient are valid.
+        using var scope = _scopeFactory.CreateScope();
+        var sp = scope.ServiceProvider;
+        var logger = sp.GetRequiredService<ILogger<AppointmentService>>();
+
+        // Retry up to 4 times with 8s delay so that a session reconnecting at the
+        // moment of booking (the most common cause of missed confirmations) has time
+        // to come back up before we give up.
+        const int maxAttempts = 4;
+        const int retryDelaySeconds = 8;
+
         try
         {
-            var phone = PhoneNormalizer.NormalizeForWaMe(appointment.CustomerPhone!);
+            var phone = PhoneNormalizer.NormalizeForWaMe(snapshot.CustomerPhone);
             if (phone is null) return;
 
-            var session = await _waSessionRepo.GetByBusinessIdAsync(appointment.BusinessId);
-            if (session is null || session.Status != WhatsAppSessionStatus.Connected) return;
+            // If no session record exists at all the business has never set up WhatsApp — bail immediately.
+            var sessionRepo = sp.GetRequiredService<IWhatsAppSessionRepository>();
+            if (await sessionRepo.GetByBusinessIdAsync(snapshot.BusinessId) is null)
+            {
+                logger.LogInformation("WhatsApp confirmation skipped for {Id}: no session configured",
+                    snapshot.AppointmentId);
+                return;
+            }
 
-            var isBlocked = await _blacklistRepo.IsBlockedAsync(appointment.BusinessId, phone);
-            if (isBlocked) return;
+            var blacklistRepo = sp.GetRequiredService<IWhatsAppBlacklistRepository>();
+            if (await blacklistRepo.IsBlockedAsync(snapshot.BusinessId, phone)) return;
 
-            var cancelUrl = BuildActionUrl(appointment.Id, AppointmentAction.Cancel,
+            var cancelUrl = BuildActionUrl(snapshot.AppointmentId, AppointmentAction.Cancel,
                 DateTimeOffset.UtcNow.AddHours(72));
 
             var body = WhatsAppTemplateRenderer.RenderConfirmation(
-                appointment.CustomerName, business.Name, service.Name,
-                appointment.AppointmentDate, cancelUrl);
+                snapshot.CustomerName, snapshot.BusinessName, snapshot.ServiceName,
+                snapshot.AppointmentDate, cancelUrl);
 
-            // Booking confirmations are transactional — bypass the anti-ban queue
-            // so the customer receives the message within seconds, not minutes.
-            await _waClient.SendTestMessageAsync(appointment.BusinessId, phone, body);
+            var waClient = sp.GetRequiredService<IWhatsAppClient>();
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                if (await waClient.SendTestMessageAsync(snapshot.BusinessId, phone, body))
+                    return;
+
+                if (attempt < maxAttempts)
+                {
+                    logger.LogInformation(
+                        "WhatsApp confirmation attempt {Attempt}/{Max} for {Id} not-ok, retrying in {Delay}s",
+                        attempt, maxAttempts, snapshot.AppointmentId, retryDelaySeconds);
+                    await Task.Delay(TimeSpan.FromSeconds(retryDelaySeconds));
+                }
+            }
+
+            logger.LogWarning("WhatsApp confirmation failed after {Max} attempts for {Id}",
+                maxAttempts, snapshot.AppointmentId);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "WhatsApp confirmation failed for appointment {Id}", appointment.Id);
+            logger.LogWarning(ex, "WhatsApp confirmation failed for appointment {Id}", snapshot.AppointmentId);
         }
     }
 

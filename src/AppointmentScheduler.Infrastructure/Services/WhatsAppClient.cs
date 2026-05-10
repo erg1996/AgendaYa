@@ -137,7 +137,13 @@ public class WhatsAppClient : IWhatsAppClient
             using var t = WithTimeout(ct, seconds: 180);
             var payload = new { to = toPhone, body, appointmentId, firstConnectedAt, timeZoneId };
             var res = await _http.PostAsJsonAsync($"sessions/{businessId}/send", payload, t.Token);
-            return res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) return true;
+
+            var detail = await SafeReadBodyAsync(res, t.Token);
+            _logger.LogWarning(
+                "WhatsApp send returned {Status} for {BusinessId} to {Phone}. Body: {Body}",
+                (int)res.StatusCode, businessId, toPhone, detail);
+            return false;
         }
         catch (Exception ex)
         {
@@ -153,12 +159,31 @@ public class WhatsAppClient : IWhatsAppClient
             using var t = WithTimeout(ct, seconds: 15);
             var payload = new { to = toPhone, body };
             var res = await _http.PostAsJsonAsync($"sessions/{businessId}/send-test", payload, t.Token);
-            return res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) return true;
+
+            var detail = await SafeReadBodyAsync(res, t.Token);
+            _logger.LogWarning(
+                "WhatsApp send-test returned {Status} for {BusinessId} to {Phone}. Body: {Body}",
+                (int)res.StatusCode, businessId, toPhone, detail);
+            return false;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "WhatsApp send test message failed for {BusinessId}", businessId);
             return false;
+        }
+    }
+
+    private static async Task<string> SafeReadBodyAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        try
+        {
+            var s = await res.Content.ReadAsStringAsync(ct);
+            return s.Length > 500 ? s[..500] : s;
+        }
+        catch
+        {
+            return "<unreadable>";
         }
     }
 
