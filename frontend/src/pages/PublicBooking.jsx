@@ -7,6 +7,7 @@ import {
   getAvailability,
   createAppointment,
 } from '../api/client'
+import { formatWallTime, formatWallDateLong, wallClockHour, todayDateKey } from '../api/dateTime'
 import { ClockIcon, AgendaYaLogo } from '../components/Icons'
 import LocationMap from '../components/LocationMap'
 
@@ -33,11 +34,8 @@ function hexWithAlpha(hex, alpha) {
 const fmtPrice = (p) =>
   p != null ? `$${Number(p).toLocaleString('es', { minimumFractionDigits: 0 })}` : null
 
-const fmtTime = (iso) =>
-  new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
-
-const fmtDateLong = (iso) =>
-  new Date(iso).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })
+const fmtTime = formatWallTime
+const fmtDateLong = formatWallDateLong
 
 const STEP_LABELS = ['Servicio', 'Horario', 'Datos']
 const DAY_NAMES = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do']
@@ -48,7 +46,7 @@ const MONTH_NAMES = [
 
 // ── Mini Calendar ────────────────────────────────────────────────────────────
 function MiniCalendar({ value, onChange, brand, onBrand }) {
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = todayDateKey()
   const todayDate = new Date(todayStr + 'T00:00:00')
 
   const [cursor, setCursor] = useState(() => {
@@ -224,8 +222,21 @@ export default function PublicBooking() {
     setSelectedSlot(null)
     try {
       const data = await getAvailability(business.id, d, selectedService.id)
-      const now = new Date()
-      setSlots(data.filter(s => new Date(s.startTime) > now))
+      // The slot's startTime is wall-clock El Salvador. Compare wall-clock-to-
+      // wall-clock against the device's local "now" so the cutoff works the same
+      // regardless of browser TZ — we only filter past slots when the chosen day
+      // is today; future days never need filtering.
+      const today = todayDateKey()
+      if (d > today) {
+        setSlots(data)
+      } else {
+        const now = new Date()
+        const nowHm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+        setSlots(data.filter(s => {
+          const m = String(s.startTime).match(/T(\d{2}:\d{2})/)
+          return m ? m[1] > nowHm : true
+        }))
+      }
     } catch {
       setSlots([])
     } finally {
@@ -305,9 +316,9 @@ export default function PublicBooking() {
     ? (business.logoUrl.startsWith('http') ? business.logoUrl : `${import.meta.env.VITE_API_URL ?? ''}${business.logoUrl}`)
     : null
 
-  // slot groups
-  const morningSlots = slots.filter(s => new Date(s.startTime).getHours() < 12)
-  const afternoonSlots = slots.filter(s => new Date(s.startTime).getHours() >= 12)
+  // slot groups (use wall-clock hour, not browser-local Date interpretation)
+  const morningSlots = slots.filter(s => wallClockHour(s.startTime) < 12)
+  const afternoonSlots = slots.filter(s => wallClockHour(s.startTime) >= 12)
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#f8fafc' }}>

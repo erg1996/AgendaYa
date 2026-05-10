@@ -1,4 +1,5 @@
 import { useLocation, useParams, Link } from 'react-router-dom'
+import { formatWallTime, formatWallDateLong } from '../api/dateTime'
 import { AgendaYaLogo } from '../components/Icons'
 
 function textOnColor(hex) {
@@ -35,13 +36,8 @@ export default function BookingConfirmation() {
     return url.startsWith('http') ? url : `${import.meta.env.VITE_API_URL ?? ''}${url}`
   }
 
-  const formatDate = (iso) =>
-    new Date(iso).toLocaleDateString('es', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-    })
-
-  const formatTime = (iso) =>
-    new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  const formatDate = formatWallDateLong
+  const formatTime = formatWallTime
 
   if (!state) {
     return (

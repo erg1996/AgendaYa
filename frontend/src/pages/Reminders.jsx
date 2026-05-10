@@ -1,18 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useBusiness } from '../components/BusinessContext'
 import { getPendingWhatsAppReminders, markWhatsAppReminderSent, getWhatsAppSession } from '../api/client'
+import { formatWallTime } from '../api/dateTime'
 import { WhatsAppIcon, BellIcon } from '../components/Icons'
 
 const ES_TZ = 'America/El_Salvador'
 const WA_STATUS = { Connected: 3 }
 
-function formatLocalTime(utcIso) {
-  return new Date(utcIso).toLocaleTimeString('es', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: ES_TZ,
-  })
-}
+// API now returns wall-clock El Salvador strings (no Z) — display them verbatim.
+const formatLocalTime = formatWallTime
 
 function tomorrowLabel() {
   const tomorrow = new Date()

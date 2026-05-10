@@ -1,5 +1,6 @@
 import { useBusiness } from '../components/BusinessContext'
 import { updateAppointmentStatus, updateAppointmentNotes, downloadReportCsv } from '../api/client'
+import { formatWallTime, formatWallDateShort, compareWallClock } from '../api/dateTime'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { ListIcon, InboxIcon, XIcon } from '../components/Icons'
@@ -42,8 +43,8 @@ export default function AppointmentsList() {
   }
 
   const getServiceName = (id) => services.find((s) => s.id === id)?.name ?? 'Servicio'
-  const formatDate = (iso) => new Date(iso).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })
-  const formatTime = (iso) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  const formatDate = formatWallDateShort
+  const formatTime = formatWallTime
 
   const handleStatusChange = async (id, newStatus) => {
     setUpdating(id)
@@ -81,7 +82,9 @@ export default function AppointmentsList() {
   }
 
   const filtered = filter === 'all' ? appointments : appointments.filter((a) => a.status === filter)
-  const sorted = [...filtered].sort((a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate))
+  // Sort by wall-clock string descending — works as a string compare since the
+  // format is yyyy-MM-ddTHH:mm:ss (no need to round-trip through Date).
+  const sorted = [...filtered].sort((a, b) => compareWallClock(b.appointmentDate, a.appointmentDate))
 
   const statusBadge = (status) => {
     const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.Pending

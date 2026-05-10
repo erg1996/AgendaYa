@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getAdminBusinessDetail } from '../api/client'
+import { formatWallDateTime } from '../api/dateTime'
 import { ChevronLeftIcon } from '../components/Icons'
 
 const fmtDate = (iso) => {
@@ -10,8 +11,7 @@ const fmtDate = (iso) => {
 }
 const fmtDateTime = (iso) => {
   if (!iso) return '—'
-  const d = new Date(iso)
-  return d.toLocaleDateString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return formatWallDateTime(iso)
 }
 const fmtMoney = (n) =>
   `$${Number(n ?? 0).toLocaleString('es', { minimumFractionDigits: 0 })}`

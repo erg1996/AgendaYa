@@ -1,6 +1,7 @@
 import { useBusiness } from '../components/BusinessContext'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { formatWallTime, formatWallDateLong, wallClockDateKey, wallClockHourFraction, compareWallClock } from '../api/dateTime'
 import { CalendarIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, ListIcon } from '../components/Icons'
 
 const STATUS_COLOR = {
@@ -72,14 +73,19 @@ export default function CalendarView() {
   const goToday  = () => { const d = new Date(); d.setHours(0,0,0,0); setWeekRef(d); setSelectedAppt(null) }
 
   const getServiceName = (id) => services.find((s) => s.id === id)?.name ?? 'Servicio'
-  const formatTime = (iso) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  const formatTime = formatWallTime
   const weekLabel = `${weekDays[0].getDate()} ${MONTHS[weekDays[0].getMonth()]} — ${weekDays[6].getDate()} ${MONTHS[weekDays[6].getMonth()]} ${weekDays[6].getFullYear()}`
 
-  // All appts for this week
-  const weekAppts = appointments.filter((a) => {
-    const d = new Date(a.appointmentDate)
-    return d >= weekDays[0] && d < new Date(weekDays[6].getTime() + 86400000)
-  }).sort((a, b) => new Date(a.appointmentDate) - new Date(b.appointmentDate))
+  // weekDayKeys: [yyyy-MM-dd, ...] for the 7 days, used for wall-clock matching.
+  const weekDayKeys = weekDays.map((d) => {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  })
+
+  // All appts for this week — compare by wall-clock date key, not Date objects.
+  const weekAppts = appointments
+    .filter((a) => weekDayKeys.includes(wallClockDateKey(a.appointmentDate)))
+    .sort((a, b) => compareWallClock(a.appointmentDate, b.appointmentDate))
 
   return (
     <div className="space-y-4">
@@ -146,7 +152,12 @@ export default function CalendarView() {
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-xs font-medium text-gray-700">
-                        {new Date(a.appointmentDate).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {(() => {
+                          const k = wallClockDateKey(a.appointmentDate)
+                          const [y, m, d] = k.split('-').map(Number)
+                          const dt = new Date(y, m - 1, d)
+                          return dt.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })
+                        })()}
                       </div>
                       <div className="text-xs text-gray-500">{formatTime(a.appointmentDate)}</div>
                     </div>
@@ -199,15 +210,16 @@ export default function CalendarView() {
               <div className="absolute inset-0" style={{ display: 'grid', gridTemplateColumns: '48px repeat(7, 1fr)' }}>
                 <div />
                 {weekDays.map((day, colIdx) => {
-                  const dayAppts = appointments.filter((a) => sameDay(new Date(a.appointmentDate), day))
+                  const dayKey = weekDayKeys[colIdx]
+                  const dayAppts = appointments.filter((a) => wallClockDateKey(a.appointmentDate) === dayKey)
                   const isToday = sameDay(day, today)
                   return (
                     <div key={colIdx} className={`relative border-l border-gray-100 ${isToday ? 'bg-indigo-50/40' : ''}`}>
                       {dayAppts.map((a) => {
-                        const d = new Date(a.appointmentDate)
-                        const topPct = ((d.getHours() + d.getMinutes() / 60 - START_HOUR) / TOTAL_HOURS) * 100
+                        const startHourFrac = wallClockHourFraction(a.appointmentDate)
+                        const topPct = ((startHourFrac - START_HOUR) / TOTAL_HOURS) * 100
                         const heightPx = Math.max(20, (a.durationMinutes / 60) * HOUR_HEIGHT)
-                        const top = Math.max(0, d.getHours() + d.getMinutes() / 60 - START_HOUR) * HOUR_HEIGHT
+                        const top = Math.max(0, startHourFrac - START_HOUR) * HOUR_HEIGHT
                         const colorClass = STATUS_COLOR[a.status] ?? STATUS_COLOR.Pending
                         const isSelected = selectedAppt?.id === a.id
                         return (
@@ -250,7 +262,7 @@ export default function CalendarView() {
             <div>
               <div className="text-xs text-gray-400 mb-0.5">Fecha</div>
               <div className="font-medium text-gray-800 capitalize">
-                {new Date(selectedAppt.appointmentDate).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {formatWallDateLong(selectedAppt.appointmentDate)}
               </div>
             </div>
             <div>
