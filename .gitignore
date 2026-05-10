@@ -16,3 +16,5 @@ frontend/dist/
 whatsapp-service/node_modules/
 whatsapp-service/data/
 whatsapp-service/.env
+# Claude Code local settings inside submodules — may contain local secrets (PGPASSWORD, etc.)
+whatsapp-service/.claude/
