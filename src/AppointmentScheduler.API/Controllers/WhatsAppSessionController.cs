@@ -17,17 +17,20 @@ public class WhatsAppSessionController : ControllerBase
 {
     private readonly IWhatsAppClient _whatsapp;
     private readonly IWhatsAppSessionRepository _sessions;
+    private readonly IWhatsAppLogRepository _logs;
     private readonly IUserBusinessRepository _userBusinesses;
     private readonly FeatureFlags _features;
 
     public WhatsAppSessionController(
         IWhatsAppClient whatsapp,
         IWhatsAppSessionRepository sessions,
+        IWhatsAppLogRepository logs,
         IUserBusinessRepository userBusinesses,
         IOptions<FeatureFlags> features)
     {
         _whatsapp = whatsapp;
         _sessions = sessions;
+        _logs = logs;
         _userBusinesses = userBusinesses;
         _features = features.Value;
     }
@@ -51,9 +54,10 @@ public class WhatsAppSessionController : ControllerBase
         if (session is null)
         {
             return Ok(new WhatsAppSessionStatusDto(
-                WhatsAppSessionStatus.Disconnected, null, null, null, null, AutoRemindersEnabled: false, TimeZoneId: null));
+                WhatsAppSessionStatus.Disconnected, null, null, null, null, AutoRemindersEnabled: false));
         }
-        return Ok(ToDto(session));
+        var dailySent = await _logs.CountTodayByBusinessIdAsync(ctx.BusinessId);
+        return Ok(ToDto(session, dailySent));
     }
 
     [HttpPost("start")]
@@ -177,8 +181,9 @@ public class WhatsAppSessionController : ControllerBase
         return Ok(ToDto(session));
     }
 
-    private static WhatsAppSessionStatusDto ToDto(WhatsAppSession s) => new(
-        s.Status, s.PhoneNumber, s.LastConnectedAt, s.LastQrGeneratedAt, s.LastError, s.AutoRemindersEnabled, s.TimeZoneId);
+    private static WhatsAppSessionStatusDto ToDto(WhatsAppSession s, int dailySent = 0) => new(
+        s.Status, s.PhoneNumber, s.LastConnectedAt, s.LastQrGeneratedAt, s.LastError,
+        s.AutoRemindersEnabled, s.TimeZoneId, s.FirstConnectedAt, dailySent);
 
     private async Task<AuthContext?> AuthorizeAsync()
     {

@@ -9,7 +9,9 @@ public record WhatsAppSessionStatusDto(
     DateTime? LastQrGeneratedAt,
     string? LastError,
     bool AutoRemindersEnabled,
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    DateTime? FirstConnectedAt = null,
+    int DailySentCount = 0);
 
 public record StartSessionResult(WhatsAppSessionStatus Status, string? LastError);
 

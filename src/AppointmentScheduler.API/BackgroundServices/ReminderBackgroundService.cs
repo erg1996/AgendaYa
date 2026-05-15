@@ -58,11 +58,13 @@ public class ReminderBackgroundService : BackgroundService
         IWhatsAppBlacklistRepository? blacklistRepo = null;
         IWhatsAppClient? waClient = null;
 
+        IWhatsAppLogRepository? logRepo = null;
         if (features.WhatsAppAutomation)
         {
             sessionCache  = new();
             blacklistRepo = scope.ServiceProvider.GetRequiredService<IWhatsAppBlacklistRepository>();
             waClient      = scope.ServiceProvider.GetRequiredService<IWhatsAppClient>();
+            logRepo       = scope.ServiceProvider.GetRequiredService<IWhatsAppLogRepository>();
         }
 
         int emailSent = 0, emailSkipped = 0, waSent = 0, waSkipped = 0;
@@ -136,10 +138,15 @@ public class ReminderBackgroundService : BackgroundService
                     a.BusinessId, normalizedPhone, body, a.Id.ToString(),
                     session.FirstConnectedAt, session.TimeZoneId);
 
-                if (ok) waSent++;
+                if (ok)
+                {
+                    waSent++;
+                    await TryLogAsync(logRepo, a.BusinessId, a.Id, normalizedPhone, a.CustomerName, success: true, senderPhone: session.PhoneNumber);
+                }
                 else
                 {
                     await appointmentRepo.MarkWhatsAppReminderFailedAsync(a.Id);
+                    await TryLogAsync(logRepo, a.BusinessId, a.Id, normalizedPhone, a.CustomerName, success: false, error: "send failed", senderPhone: session.PhoneNumber);
                     _logger.LogWarning("WhatsApp send failed for appointment {Id}", a.Id);
                     // Poison the cache entry so we skip remaining appointments for this
                     // business this run rather than claiming + failing them individually.
@@ -149,6 +156,7 @@ public class ReminderBackgroundService : BackgroundService
             catch (Exception ex)
             {
                 await appointmentRepo.MarkWhatsAppReminderFailedAsync(a.Id);
+                await TryLogAsync(logRepo, a.BusinessId, a.Id, normalizedPhone, a.CustomerName, success: false, error: ex.Message, senderPhone: session.PhoneNumber);
                 _logger.LogError(ex, "Exception sending WhatsApp reminder for appointment {Id}", a.Id);
             }
         }
@@ -164,5 +172,29 @@ public class ReminderBackgroundService : BackgroundService
         var letter  = action == AppointmentAction.Confirm ? "c" : "x";
         var baseUrl = opts.AppBaseUrl.TrimEnd('/');
         return $"{baseUrl}/a/{letter}/{token}";
+    }
+
+    private static async Task TryLogAsync(IWhatsAppLogRepository? repo, Guid businessId, Guid appointmentId,
+        string phone, string name, bool success, string? error = null, string? senderPhone = null)
+    {
+        if (repo is null) return;
+        try
+        {
+            await repo.AddAsync(new Domain.Entities.WhatsAppLog
+            {
+                Id = Guid.NewGuid(),
+                BusinessId = businessId,
+                AppointmentId = appointmentId,
+                SenderPhone = senderPhone,
+                RecipientPhone = phone,
+                RecipientName = name,
+                MessageType = Domain.Entities.WhatsAppMessageType.AutoReminder,
+                Success = success,
+                ErrorReason = error,
+                SentAt = DateTime.UtcNow.AddHours(-6),
+            });
+            await repo.SaveChangesAsync();
+        }
+        catch { }
     }
 }

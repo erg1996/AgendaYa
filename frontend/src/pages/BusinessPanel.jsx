@@ -23,6 +23,7 @@ import {
   getEmployees,
   createEmployee,
   updateEmployee,
+  uploadEmployeeAvatar,
   getEmployeeWorkingHours,
   addEmployeeWorkingHours,
   updateEmployeeWorkingHours,
@@ -61,6 +62,7 @@ export default function BusinessPanel() {
     { key: 'whatsapp', label: 'WhatsApp' },
     ...(autoWhatsAppEnabled ? [{ key: 'whatsappAuto', label: 'Automatización WA' }] : []),
     { key: 'location', label: 'Ubicación' },
+    { key: 'notifications', label: 'Notificaciones' },
   ]
 
   return (
@@ -107,6 +109,7 @@ export default function BusinessPanel() {
       {tab === 'whatsapp' && <WhatsAppTab business={business} />}
       {tab === 'whatsappAuto' && <WhatsAppAutoTab />}
       {tab === 'location' && <LocationTab business={business} />}
+      {tab === 'notifications' && <NotificationsTab business={business} />}
     </div>
   )
 }
@@ -553,12 +556,36 @@ function EmployeesTab({ businessId, services }) {
   )
 }
 
+function EmployeeAvatar({ avatarUrl, color, name, size = 'md' }) {
+  const sz = size === 'lg' ? 'w-16 h-16 text-xl' : size === 'sm' ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm'
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        className={`${sz} rounded-full object-cover flex-shrink-0 border-2 border-white shadow-sm`}
+      />
+    )
+  }
+  return (
+    <div
+      className={`${sz} rounded-full flex-shrink-0 flex items-center justify-center font-semibold text-white`}
+      style={{ backgroundColor: color ?? '#6366f1' }}
+    >
+      {name?.charAt(0)?.toUpperCase() ?? '?'}
+    </div>
+  )
+}
+
 function EmployeeCard({ employee: emp, businessId, services, expanded, onToggle, onRefresh }) {
   const [editMode, setEditMode] = useState(false)
   const [name, setName] = useState(emp.name)
   const [color, setColor] = useState(emp.color ?? '#6366f1')
   const [isActive, setIsActive] = useState(emp.isActive)
   const [commissionPercent, setCommissionPercent] = useState(emp.commissionPercent ?? 100)
+  const [specialization, setSpecialization] = useState(emp.specialization ?? '')
+  const [avatarUrl, setAvatarUrl] = useState(emp.avatarUrl ?? null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
   const [empServices, setEmpServices] = useState(
     emp.services.map((s) => ({ serviceId: s.serviceId, overridePrice: s.overridePrice ?? '', overrideDurationMinutes: s.overrideDurationMinutes ?? '' }))
   )
@@ -573,6 +600,21 @@ function EmployeeCard({ employee: emp, businessId, services, expanded, onToggle,
     )
   }
 
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarUploading(true)
+    setMsg({ type: '', text: '' })
+    try {
+      const { url } = await uploadEmployeeAvatar(file)
+      setAvatarUrl(url)
+    } catch (err) {
+      setMsg({ type: 'error', text: `Foto: ${err.message}` })
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     setMsg({ type: '', text: '' })
@@ -583,6 +625,8 @@ function EmployeeCard({ employee: emp, businessId, services, expanded, onToggle,
         isActive,
         displayOrder: emp.displayOrder,
         commissionPercent: Number(commissionPercent),
+        specialization: specialization.trim() || null,
+        avatarUrl,
         services: empServices.map((s) => ({
           serviceId: s.serviceId,
           overridePrice: s.overridePrice !== '' ? Number(s.overridePrice) : null,
@@ -606,11 +650,14 @@ function EmployeeCard({ employee: emp, businessId, services, expanded, onToggle,
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: emp.color ?? '#6366f1' }} />
+          <EmployeeAvatar avatarUrl={emp.avatarUrl} color={emp.color} name={emp.name} />
           <div>
             <span className="font-medium text-gray-900">{emp.name}</span>
             {!emp.isActive && (
               <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactivo</span>
+            )}
+            {emp.specialization && (
+              <p className="text-xs text-indigo-500 font-medium mt-0.5">{emp.specialization}</p>
             )}
             <p className="text-xs text-gray-400 mt-0.5">
               {emp.services.length === 0 ? 'Sin servicios' : emp.services.map((s) => s.serviceName).join(', ')}
@@ -624,6 +671,37 @@ function EmployeeCard({ employee: emp, businessId, services, expanded, onToggle,
         <div className="border-t border-gray-100 px-5 py-4 space-y-5">
           {editMode ? (
             <div className="space-y-4">
+              {/* Avatar upload */}
+              <div className="flex items-center gap-4">
+                <EmployeeAvatar avatarUrl={avatarUrl} color={color} name={name} size="lg" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Foto de perfil</label>
+                  <label className={`cursor-pointer inline-flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                    avatarUploading
+                      ? 'border-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50'
+                  }`}>
+                    {avatarUploading ? 'Subiendo...' : 'Subir foto'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      disabled={avatarUploading}
+                      onChange={handleAvatarChange}
+                    />
+                  </label>
+                  {avatarUrl && (
+                    <button
+                      onClick={() => setAvatarUrl(null)}
+                      className="ml-2 text-xs text-red-400 hover:text-red-600 transition-colors"
+                    >
+                      Quitar foto
+                    </button>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">JPG, PNG o WebP — máx. 2 MB</p>
+                </div>
+              </div>
+
               <div className="flex gap-4 flex-wrap items-end">
                 <div className="flex-1 min-w-[160px]">
                   <label className="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
@@ -652,6 +730,17 @@ function EmployeeCard({ employee: emp, businessId, services, expanded, onToggle,
                     className="w-4 h-4 text-indigo-600 rounded" />
                   <span className="text-sm text-gray-700">Activo</span>
                 </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Especialización <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <input
+                  value={specialization}
+                  onChange={(e) => setSpecialization(e.target.value)}
+                  placeholder="Ej: Colorista, Masaje deportivo, Barbería clásica…"
+                  maxLength={500}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                />
               </div>
 
               <div>
@@ -705,7 +794,7 @@ function EmployeeCard({ employee: emp, businessId, services, expanded, onToggle,
                 <p className={`text-sm ${msg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>
               )}
               <div className="flex gap-3">
-                <button onClick={handleSave} disabled={saving}
+                <button onClick={handleSave} disabled={saving || avatarUploading}
                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                   {saving ? 'Guardando...' : 'Guardar cambios'}
                 </button>
@@ -714,14 +803,19 @@ function EmployeeCard({ employee: emp, businessId, services, expanded, onToggle,
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="text-sm text-gray-600">
-                <span className="font-medium">Comisión:</span> {emp.commissionPercent}%
+            <div className="space-y-3">
+              {emp.specialization && (
+                <p className="text-sm text-gray-600 italic">"{emp.specialization}"</p>
+              )}
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">Comisión:</span> {emp.commissionPercent}%
+                </div>
+                <button onClick={() => setEditMode(true)}
+                  className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                  Editar información
+                </button>
               </div>
-              <button onClick={() => setEditMode(true)}
-                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
-                Editar información
-              </button>
             </div>
           )}
 
@@ -1146,6 +1240,89 @@ const TZ_OPTIONS = [
   { value: 'UTC',                 label: 'UTC' },
 ]
 
+function WarmUpUsage({ session }) {
+  const { firstConnectedAt, dailySentCount } = session
+  const sent = dailySentCount ?? 0
+
+  // Compute tier limit based on days since first connection
+  const daysSince = firstConnectedAt
+    ? Math.floor((Date.now() - new Date(firstConnectedAt).getTime()) / 86400000)
+    : 999
+  const inWarmUp = daysSince < 14
+  const limit = daysSince <= 3 ? 10 : daysSince <= 7 ? 20 : daysSince < 14 ? 50 : 200
+  const pct = Math.min(100, Math.round((sent / limit) * 100))
+  const nearLimit = pct >= 80
+  const atLimit = pct >= 100
+
+  const barColor = atLimit ? 'bg-red-500' : nearLimit ? 'bg-amber-500' : 'bg-green-500'
+  const cardColor = atLimit
+    ? 'bg-red-50 border-red-200 text-red-800'
+    : nearLimit
+    ? 'bg-amber-50 border-amber-200 text-amber-800'
+    : 'bg-gray-50 border-gray-200 text-gray-700'
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 text-xs ${cardColor}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="font-semibold">
+          {inWarmUp
+            ? `Calentando — día ${daysSince + 1} de 14`
+            : 'Uso de hoy'}
+        </span>
+        <span className="font-semibold tabular-nums">
+          {sent} / {limit} mensajes
+        </span>
+      </div>
+
+      <div className="w-full h-1.5 rounded-full bg-black/10 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+
+      {atLimit && (
+        <p className="mt-1.5 font-medium">
+          Límite diario alcanzado. Los mensajes se enviarán mañana.
+        </p>
+      )}
+      {!atLimit && nearLimit && (
+        <p className="mt-1.5">
+          Te quedan solo {limit - sent} mensaje{limit - sent !== 1 ? 's' : ''} hoy.
+        </p>
+      )}
+      {inWarmUp && !atLimit && !nearLimit && (
+        <p className="mt-1.5 opacity-75">
+          Límite sube en {14 - daysSince} día{14 - daysSince !== 1 ? 's' : ''} · envío pleno: 200/día
+        </p>
+      )}
+    </div>
+  )
+}
+
+function translateWaError(msg) {
+  if (!msg) return 'Error desconocido'
+  const m = msg.toLowerCase()
+  if (m.includes('whatsapp-service unreachable') || m.includes('502'))
+    return 'No se pudo conectar con el servicio de WhatsApp. Verifica que el servicio esté activo.'
+  if (m.includes('session_not_connected') || m.includes('not_connected') || m.includes('not connected'))
+    return 'La sesión de WhatsApp no está conectada. Reconéctala desde este panel.'
+  if (m.includes('send_failed') || m.includes('send failed'))
+    return 'No se pudo enviar el mensaje. Verifica que la sesión esté activa e inténtalo de nuevo.'
+  if (m.includes('invalid_phone') || m.includes('invalid phone'))
+    return 'Número inválido. Ingresa un número de El Salvador (8 dígitos) o con código +503.'
+  if (m.includes('to required'))
+    return 'Ingresa un número de teléfono.'
+  if (m.includes('failed to fetch') || m.includes('fetch failed') || m.includes('load failed') || m.includes('networkerror') || m.includes('network error'))
+    return 'Error de conexión. Verifica tu internet e intenta de nuevo.'
+  if (m.includes('session expired'))
+    return 'Tu sesión expiró. Inicia sesión de nuevo.'
+  if (m.includes('forbidden') || m.includes('403'))
+    return 'No tienes permiso para realizar esta acción.'
+  if (m.includes('not found') || m.includes('404'))
+    return 'Función no disponible. Verifica que el servicio de WhatsApp esté habilitado.'
+  if (m.includes('already') || m.includes('conflict'))
+    return 'Ya existe una sesión activa para este negocio.'
+  return msg
+}
+
 function WhatsAppAutoTab() {
   const [session, setSession] = useState(null)
   const [qrUrl, setQrUrl] = useState(null)
@@ -1161,7 +1338,7 @@ function WhatsAppAutoTab() {
       const data = await getWhatsAppSession()
       setSession(data)
     } catch (err) {
-      setMsg({ type: 'error', text: err.message })
+      setMsg({ type: 'error', text: translateWaError(err.message) })
     } finally {
       setLoading(false)
     }
@@ -1219,7 +1396,7 @@ function WhatsAppAutoTab() {
       const data = await startWhatsAppSession()
       setSession(data)
     } catch (err) {
-      setMsg({ type: 'error', text: err.message })
+      setMsg({ type: 'error', text: translateWaError(err.message) })
     } finally {
       setWorking(false)
     }
@@ -1233,7 +1410,7 @@ function WhatsAppAutoTab() {
       await disconnectWhatsAppSession()
       setSession({ status: WA_STATUS.Disconnected, autoRemindersEnabled: false, phoneNumber: null, lastConnectedAt: null, lastQrGeneratedAt: null, lastError: null })
     } catch (err) {
-      setMsg({ type: 'error', text: err.message })
+      setMsg({ type: 'error', text: translateWaError(err.message) })
     } finally {
       setWorking(false)
     }
@@ -1249,7 +1426,7 @@ function WhatsAppAutoTab() {
       setMsg({ type: 'success', text: `Mensaje de prueba enviado a ${testTo.trim()}` })
       setTestTo('')
     } catch (err) {
-      setMsg({ type: 'error', text: err.message })
+      setMsg({ type: 'error', text: translateWaError(err.message) })
     } finally {
       setTestSending(false)
     }
@@ -1263,7 +1440,7 @@ function WhatsAppAutoTab() {
       setSession(data)
       setMsg({ type: 'success', text: tz ? 'Zona horaria guardada' : next ? 'Recordatorios automáticos activados' : 'Recordatorios automáticos desactivados' })
     } catch (err) {
-      setMsg({ type: 'error', text: err.message })
+      setMsg({ type: 'error', text: translateWaError(err.message) })
     } finally {
       setWorking(false)
     }
@@ -1361,19 +1538,7 @@ function WhatsAppAutoTab() {
               )}
             </div>
 
-            {(() => {
-              if (!session.firstConnectedAt) return null
-              const daysSince = Math.floor((Date.now() - new Date(session.firstConnectedAt).getTime()) / 86400000)
-              if (daysSince >= 14) return null
-              const limit = daysSince <= 3 ? 10 : daysSince <= 7 ? 20 : 50
-              const daysLeft = 14 - daysSince
-              return (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
-                  <strong>Calentando cuenta</strong> — día {daysSince + 1} de 14. Límite actual: {limit} mensajes/día.
-                  Envío pleno en {daysLeft} día{daysLeft !== 1 ? 's' : ''}.
-                </div>
-              )
-            })()}
+            <WarmUpUsage session={session} />
 
             <label className="flex items-center gap-3 cursor-pointer">
               <input
@@ -1432,7 +1597,7 @@ function WhatsAppAutoTab() {
         {status === WA_STATUS.Failed && (
           <div className="space-y-3">
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-              Error: {session.lastError ?? 'desconocido'}
+              {translateWaError(session.lastError)}
             </div>
             <button
               onClick={handleStart}
@@ -1575,6 +1740,126 @@ function BlockedDatesTab({ businessId }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function NotificationsTab({ business }) {
+  const { setBusiness } = useBusiness()
+  const [notifyEmail, setNotifyEmail] = useState(business.ownerNotifyEmail ?? true)
+  const [notifyWa, setNotifyWa] = useState(business.ownerNotifyWhatsApp ?? false)
+  const [phone, setPhone] = useState(business.ownerNotifyPhone ?? '')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState({ type: '', text: '' })
+
+  const handleSave = async () => {
+    setSaving(true)
+    setMsg({ type: '', text: '' })
+    try {
+      const updated = await updateBusiness(business.id, {
+        ownerNotifyEmail: notifyEmail,
+        ownerNotifyWhatsApp: notifyWa,
+        ownerNotifyPhone: phone.trim() || null,
+      })
+      setBusiness(updated)
+      setMsg({ type: 'success', text: 'Preferencias guardadas' })
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6 max-w-lg">
+      <div>
+        <h2 className="text-lg font-semibold text-gray-800">Notificaciones de nuevas citas</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Elige cómo quieres recibir alertas cuando un cliente reserve una cita.
+        </p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
+        <label className="flex items-center justify-between px-5 py-4 cursor-pointer">
+          <div>
+            <p className="font-medium text-gray-800 text-sm">Notificación por correo</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Se envía un correo a todos los dueños del negocio
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={notifyEmail}
+            onClick={() => setNotifyEmail(v => !v)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+              notifyEmail ? 'bg-indigo-600' : 'bg-gray-200'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                notifyEmail ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </label>
+
+        <label className="flex items-center justify-between px-5 py-4 cursor-pointer">
+          <div>
+            <p className="font-medium text-gray-800 text-sm">Notificación por WhatsApp</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Se envía un mensaje desde tu sesión activa de WhatsApp
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={notifyWa}
+            onClick={() => setNotifyWa(v => !v)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+              notifyWa ? 'bg-green-500' : 'bg-gray-200'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                notifyWa ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </label>
+
+        {notifyWa && (
+          <div className="px-5 py-4 bg-green-50">
+            <label className="block text-xs font-medium text-gray-700 mb-1.5">
+              Número de WhatsApp del dueño
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="7890-1234 o +503 7890-1234"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-green-400 bg-white"
+            />
+            <p className="text-xs text-gray-400 mt-1.5">
+              El mensaje llegará a este número desde tu sesión activa de WhatsApp.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {msg.text && (
+        <p className={`text-sm font-medium ${msg.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+          {msg.text}
+        </p>
+      )}
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+      >
+        {saving ? 'Guardando…' : 'Guardar'}
+      </button>
     </div>
   )
 }

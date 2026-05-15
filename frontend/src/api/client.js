@@ -220,6 +220,13 @@ export const downloadReportCsv = async (businessId, from, to) => {
   URL.revokeObjectURL(url)
 }
 
+// ─── WhatsApp Log ─────────────────────────────────────────────────────────────
+export const getWhatsAppLog = (businessId, page = 1, pageSize = 50, type = null) => {
+  const params = new URLSearchParams({ businessId, page, pageSize })
+  if (type) params.set('type', type)
+  return authRequest(`/api/whatsapp-log?${params}`)
+}
+
 // ─── Admin (super admin only) ─────────────────────────────────────────────────
 export const getAdminOverview = () => authRequest('/api/admin/overview')
 export const getAdminBusinesses = () => authRequest('/api/admin/businesses')
@@ -269,6 +276,28 @@ export const getWhatsAppQrBlobUrl = async () => {
 }
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
+export const uploadEmployeeAvatar = async (file) => {
+  const token = getToken()
+  const csrfToken = getCsrfToken()
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  if (csrfToken) headers['X-CSRF-Token'] = csrfToken
+
+  const res = await fetch(`${BASE_URL}/api/upload/avatar`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error ?? `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 export const uploadLogo = async (file) => {
   const token = getToken()
   const csrfToken = getCsrfToken()

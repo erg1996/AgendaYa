@@ -96,7 +96,13 @@ public class WhatsAppInternalWebhookController : ControllerBase
         switch (payload.@event.ToLowerInvariant())
         {
             case "session.connected":
-                if (session.FirstConnectedAt is null) session.FirstConnectedAt = now;
+                // Reset warm-up clock when a DIFFERENT number connects so the new
+                // number starts at tier-1 limits (10/day) instead of inheriting
+                // the old number's established-sender rate.
+                var isNewNumber = !string.IsNullOrEmpty(payload.phoneNumber)
+                                  && payload.phoneNumber != session.PhoneNumber;
+                if (session.FirstConnectedAt is null || isNewNumber)
+                    session.FirstConnectedAt = now;
                 session.Status = WhatsAppSessionStatus.Connected;
                 session.PhoneNumber = payload.phoneNumber;
                 session.LastConnectedAt = now;

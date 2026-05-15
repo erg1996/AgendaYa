@@ -8,6 +8,7 @@ public record EmployeeResponse(
     string Name,
     string Color,
     string? AvatarUrl,
+    string? Specialization,
     bool IsActive,
     int DisplayOrder,
     decimal CommissionPercent,
@@ -33,7 +34,9 @@ public record UpdateEmployeeRequest(
     bool IsActive,
     int DisplayOrder,
     decimal CommissionPercent,
-    List<UpsertEmployeeServiceRequest> Services);
+    List<UpsertEmployeeServiceRequest> Services,
+    [MaxLength(500)] string? Specialization = null,
+    [MaxLength(500)] string? AvatarUrl = null);
 
 public record UpsertEmployeeServiceRequest(
     Guid ServiceId,
@@ -41,4 +44,4 @@ public record UpsertEmployeeServiceRequest(
     int? OverrideDurationMinutes);
 
 // Minimal info for slot responses and appointment lists.
-public record EmployeeSummary(Guid Id, string Name, string Color);
+public record EmployeeSummary(Guid Id, string Name, string Color, string? AvatarUrl = null, string? Specialization = null);

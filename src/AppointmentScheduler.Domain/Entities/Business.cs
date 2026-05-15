@@ -8,6 +8,9 @@ public class Business
     public string? LogoUrl { get; set; }
     public string? BrandColor { get; set; }
     public string? WhatsAppReminderTemplate { get; set; }
+    public bool OwnerNotifyEmail { get; set; } = true;
+    public bool OwnerNotifyWhatsApp { get; set; } = false;
+    public string? OwnerNotifyPhone { get; set; }
     public string? Address { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }

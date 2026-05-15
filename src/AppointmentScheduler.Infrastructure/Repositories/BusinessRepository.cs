@@ -2,6 +2,7 @@ using AppointmentScheduler.Application.Interfaces;
 using AppointmentScheduler.Domain.Entities;
 using AppointmentScheduler.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 
 namespace AppointmentScheduler.Infrastructure.Repositories;
 
@@ -16,6 +17,12 @@ public class BusinessRepository : IBusinessRepository
 
     public async Task<Business?> GetBySlugAsync(string slug) =>
         await _context.Businesses.FirstOrDefaultAsync(b => b.Slug == slug);
+
+    public async Task<List<string>> GetOwnerEmailsAsync(Guid businessId) =>
+        await _context.UserBusinesses
+            .Where(ub => ub.BusinessId == businessId)
+            .Join(_context.Users, ub => ub.UserId, u => u.Id, (_, u) => u.Email)
+            .ToListAsync();
 
     public async Task AddAsync(Business business) =>
         await _context.Businesses.AddAsync(business);

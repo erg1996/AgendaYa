@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IAdminRepository, AdminRepository>();
         services.AddScoped<IWhatsAppSessionRepository, WhatsAppSessionRepository>();
         services.AddScoped<IWhatsAppBlacklistRepository, WhatsAppBlacklistRepository>();
+        services.AddScoped<IWhatsAppLogRepository, WhatsAppLogRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 
         // Application services

@@ -37,6 +37,23 @@ const fmtPrice = (p) =>
 const fmtTime = formatWallTime
 const fmtDateLong = formatWallDateLong
 
+function translateBookingError(msg) {
+  if (!msg) return msg
+  if (msg.includes('already passed') || msg.includes('ya pasó') || msg.includes('time slot') && msg.includes('past'))
+    return 'La fecha de la cita ya pasó. Por favor selecciona otro horario.'
+  if (msg.includes('conflicts') || msg.includes('conflict'))
+    return 'Ese horario ya fue reservado. Por favor elige otro.'
+  if (msg.includes('working hours') || msg.includes('outside'))
+    return 'El horario seleccionado está fuera del horario de atención.'
+  if (msg.includes('no active employee') || msg.includes('No active employee'))
+    return 'No hay empleados disponibles para este servicio.'
+  if (msg.includes('not found') || msg.includes('Not found'))
+    return 'El servicio o negocio ya no está disponible.'
+  if (msg.includes('Network') || msg.includes('fetch'))
+    return 'Error de conexión. Verifica tu internet e intenta de nuevo.'
+  return msg
+}
+
 const STEP_LABELS = ['Servicio', 'Horario', 'Datos']
 const DAY_NAMES = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do']
 const MONTH_NAMES = [
@@ -312,7 +329,7 @@ export default function PublicBooking() {
         },
       })
     } catch (err) {
-      setBookingError(err.message)
+      setBookingError(translateBookingError(err.message))
     } finally {
       setBooking(false)
     }
@@ -568,13 +585,24 @@ export default function PublicBooking() {
                     <button
                       key={emp.id}
                       onClick={() => handleEmployeeSelect(emp.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
                       style={selectedEmployeeId === emp.id
                         ? { background: brand, color: onBrand, borderColor: brand }
                         : { background: 'white', color: '#374151', borderColor: '#d1d5db' }}
                     >
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: emp.color ?? '#6366f1' }} />
-                      {emp.name}
+                      {emp.avatarUrl ? (
+                        <img src={emp.avatarUrl} alt={emp.name}
+                          className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <span className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
+                          style={{ background: emp.color ?? '#6366f1' }}>
+                          {emp.name?.charAt(0)?.toUpperCase()}
+                        </span>
+                      )}
+                      <span>{emp.name}</span>
+                      {emp.specialization && (
+                        <span className="hidden sm:inline opacity-60">· {emp.specialization}</span>
+                      )}
                     </button>
                   ))}
                 </div>

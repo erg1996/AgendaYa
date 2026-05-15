@@ -22,6 +22,19 @@ public interface IEmailService
         string? brandColor = null,
         string? logoUrl = null);
 
+    Task SendNewBookingNotificationAsync(
+        string toEmail,
+        string businessName,
+        string customerName,
+        string serviceName,
+        string employeeName,
+        DateTime appointmentDate,
+        int durationMinutes,
+        string? customerPhone = null,
+        string? customerEmail = null,
+        string? brandColor = null,
+        string? logoUrl = null);
+
     Task SendWhatsAppSessionDownAsync(
         string toEmail,
         string businessName,

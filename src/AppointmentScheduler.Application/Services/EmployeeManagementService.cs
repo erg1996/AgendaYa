@@ -83,6 +83,9 @@ public class EmployeeManagementService
         emp.IsActive = request.IsActive;
         emp.DisplayOrder = request.DisplayOrder;
         emp.CommissionPercent = request.CommissionPercent;
+        emp.Specialization = string.IsNullOrWhiteSpace(request.Specialization) ? null : request.Specialization.Trim();
+        if (request.AvatarUrl != null)
+            emp.AvatarUrl = string.IsNullOrWhiteSpace(request.AvatarUrl) ? null : request.AvatarUrl.Trim();
 
         // Replace service links
         emp.EmployeeServices.Clear();
@@ -175,7 +178,7 @@ public class EmployeeManagementService
     }
 
     private static EmployeeResponse ToResponse(Employee e, Dictionary<Guid, Domain.Entities.Service> svcMap) =>
-        new(e.Id, e.BusinessId, e.Name, e.Color, e.AvatarUrl, e.IsActive, e.DisplayOrder, e.CommissionPercent,
+        new(e.Id, e.BusinessId, e.Name, e.Color, e.AvatarUrl, e.Specialization, e.IsActive, e.DisplayOrder, e.CommissionPercent,
             e.EmployeeServices.Select(es =>
             {
                 svcMap.TryGetValue(es.ServiceId, out var svc);

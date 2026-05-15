@@ -7,6 +7,7 @@ public class Employee
     public string Name { get; set; } = string.Empty;
     public string Color { get; set; } = "#6366f1";
     public string? AvatarUrl { get; set; }
+    public string? Specialization { get; set; }
     public bool IsActive { get; set; } = true;
     public int DisplayOrder { get; set; }
     public decimal CommissionPercent { get; set; } = 100m;

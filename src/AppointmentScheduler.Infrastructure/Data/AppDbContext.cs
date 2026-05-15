@@ -34,6 +34,7 @@ public class AppDbContext : DbContext
     public DbSet<WhatsAppMessageTemplate> WhatsAppMessageTemplates => Set<WhatsAppMessageTemplate>();
     public DbSet<WhatsAppSession> WhatsAppSessions => Set<WhatsAppSession>();
     public DbSet<WhatsAppBlacklist> WhatsAppBlacklists => Set<WhatsAppBlacklist>();
+    public DbSet<WhatsAppLog> WhatsAppLogs => Set<WhatsAppLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -45,6 +46,9 @@ public class AppDbContext : DbContext
             entity.Property(e => e.LogoUrl).HasMaxLength(500);
             entity.Property(e => e.BrandColor).HasMaxLength(20);
             entity.Property(e => e.WhatsAppReminderTemplate).HasMaxLength(2000);
+            entity.Property(e => e.OwnerNotifyEmail).HasDefaultValue(true);
+            entity.Property(e => e.OwnerNotifyWhatsApp).HasDefaultValue(false);
+            entity.Property(e => e.OwnerNotifyPhone).HasMaxLength(30);
             entity.Property(e => e.Address).HasMaxLength(500);
             entity.HasIndex(e => e.Slug).IsUnique();
         });
@@ -187,6 +191,21 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.NormalizedPhone).IsRequired().HasMaxLength(30);
             entity.HasIndex(e => new { e.BusinessId, e.NormalizedPhone }).IsUnique();
+            entity.HasOne(e => e.Business)
+                .WithMany()
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WhatsAppLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SenderPhone).HasMaxLength(30);
+            entity.Property(e => e.RecipientPhone).IsRequired().HasMaxLength(30);
+            entity.Property(e => e.RecipientName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.MessageType).HasConversion<int>();
+            entity.Property(e => e.ErrorReason).HasMaxLength(500);
+            entity.HasIndex(e => new { e.BusinessId, e.SentAt });
             entity.HasOne(e => e.Business)
                 .WithMany()
                 .HasForeignKey(e => e.BusinessId)

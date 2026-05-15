@@ -20,6 +20,39 @@ public class UploadController : ControllerBase
         ["image/gif"] = ".gif",
     };
 
+    [HttpPost("avatar")]
+    public async Task<IActionResult> UploadAvatar(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { error = "No file provided." });
+
+        if (file.Length > 2 * 1024 * 1024)
+            return BadRequest(new { error = "File size must be under 2MB." });
+
+        if (!AllowedTypes.TryGetValue(file.ContentType ?? "", out var canonicalExt))
+            return BadRequest(new { error = "Only JPG, PNG, WebP, and GIF images are allowed." });
+
+        if (!await HasValidImageSignatureAsync(file, canonicalExt))
+            return BadRequest(new { error = "File content does not match its declared type." });
+
+        var webRoot = _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        var uploadsDir = Path.GetFullPath(Path.Combine(webRoot, "uploads", "avatars"));
+        Directory.CreateDirectory(uploadsDir);
+
+        var fileName = $"{Guid.NewGuid():N}{canonicalExt}";
+        var filePath = Path.GetFullPath(Path.Combine(uploadsDir, fileName));
+
+        if (!filePath.StartsWith(uploadsDir + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            return BadRequest(new { error = "Invalid file path." });
+
+        await using (var stream = new FileStream(filePath, FileMode.CreateNew))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        return Ok(new { url = $"/uploads/avatars/{fileName}" });
+    }
+
     [HttpPost("logo")]
     public async Task<IActionResult> UploadLogo(IFormFile file)
     {

@@ -89,7 +89,7 @@ public class AvailabilityService
                         emps = [];
                         slotMap[slot] = emps;
                     }
-                    emps.Add(new EmployeeSummary(emp.Id, emp.Name, emp.Color));
+                    emps.Add(new EmployeeSummary(emp.Id, emp.Name, emp.Color, emp.AvatarUrl, emp.Specialization));
                 }
             }
         }

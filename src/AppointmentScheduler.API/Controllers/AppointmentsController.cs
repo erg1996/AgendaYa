@@ -72,11 +72,13 @@ public class AppointmentsController : ControllerBase
 
     [Authorize]
     [HttpPost("{id:guid}/reminders/whatsapp")]
-    public async Task<IActionResult> MarkWhatsAppReminderSent(Guid id, [FromQuery] Guid businessId)
+    public async Task<IActionResult> SendWhatsAppReminder(Guid id, [FromQuery] Guid businessId)
     {
         var userId = User.GetUserId();
         await _businessService.ValidateOwnershipAsync(userId, businessId);
-        await _appointmentService.MarkWhatsAppReminderSentAsync(id, businessId);
-        return NoContent();
+        var (sent, error) = await _appointmentService.SendManualWhatsAppReminderAsync(id, businessId);
+        if (!sent)
+            return UnprocessableEntity(new { error });
+        return Ok(new { sent = true });
     }
 }

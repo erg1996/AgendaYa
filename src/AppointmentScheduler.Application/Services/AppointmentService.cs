@@ -58,6 +58,11 @@ public class AppointmentService
         var (employee, effectiveDuration) = await ResolveEmployeeAsync(request, service);
 
         var appointmentDate = request.AppointmentDate;
+
+        var nowElSalvador = DateTime.UtcNow.AddHours(-6);
+        if (appointmentDate < nowElSalvador.AddMinutes(-5))
+            throw new ConflictException("La fecha de la cita ya pasó. Por favor selecciona otro horario.");
+
         var endTime = appointmentDate.AddMinutes(effectiveDuration);
 
         // Validate slot falls within the employee's working hours for that day.
@@ -119,6 +124,30 @@ public class AppointmentService
             _ = Task.Run(() => SendWhatsAppConfirmationAsync(snapshot));
         }
 
+        // Owner notifications — email and/or WhatsApp, gated on per-business settings.
+        if (business.OwnerNotifyEmail)
+        {
+            var ownerEmails = await _businessRepository.GetOwnerEmailsAsync(request.BusinessId);
+            foreach (var ownerEmail in ownerEmails)
+            {
+                _ = _emailService.SendNewBookingNotificationAsync(
+                    ownerEmail, business.Name, appointment.CustomerName,
+                    service.Name, employee.Name ?? "",
+                    appointment.AppointmentDate, appointment.DurationMinutes,
+                    appointment.CustomerPhone, appointment.CustomerEmail,
+                    business.BrandColor, business.LogoUrl);
+            }
+        }
+
+        if (_features.WhatsAppAutomation && business.OwnerNotifyWhatsApp && !string.IsNullOrEmpty(business.OwnerNotifyPhone))
+        {
+            var ownerSnap = new OwnerWaNotificationSnapshot(
+                appointment.BusinessId, appointment.CustomerName, service.Name,
+                employee.Name ?? "", appointment.AppointmentDate, appointment.DurationMinutes,
+                appointment.CustomerPhone, business.OwnerNotifyPhone);
+            _ = Task.Run(() => SendOwnerWhatsAppNotificationAsync(ownerSnap));
+        }
+
         return ToResponse(appointment, employee);
     }
 
@@ -156,6 +185,11 @@ public class AppointmentService
         Guid AppointmentId, Guid BusinessId, string CustomerName,
         string CustomerPhone, DateTime AppointmentDate,
         string BusinessName, string ServiceName);
+
+    private record OwnerWaNotificationSnapshot(
+        Guid BusinessId, string CustomerName, string ServiceName,
+        string EmployeeName, DateTime AppointmentDate, int DurationMinutes,
+        string? CustomerPhone, string OwnerPhone);
 
     public async Task<PaginatedResponse<AppointmentResponse>> GetByBusinessIdAsync(Guid businessId, int page = 1, int pageSize = 50)
     {
@@ -272,11 +306,17 @@ public class AppointmentService
                 snapshot.AppointmentDate, cancelUrl);
 
             var waClient = sp.GetRequiredService<IWhatsAppClient>();
+            var logRepo  = sp.GetRequiredService<IWhatsAppLogRepository>();
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 if (await waClient.SendTestMessageAsync(snapshot.BusinessId, phone, body))
+                {
+                    await WriteLogAsync(logRepo, snapshot.BusinessId, snapshot.AppointmentId,
+                        snapshot.CustomerPhone, snapshot.CustomerName,
+                        Domain.Entities.WhatsAppMessageType.Confirmation, success: true);
                     return;
+                }
 
                 if (attempt < maxAttempts)
                 {
@@ -289,10 +329,46 @@ public class AppointmentService
 
             logger.LogWarning("WhatsApp confirmation failed after {Max} attempts for {Id}",
                 maxAttempts, snapshot.AppointmentId);
+            await WriteLogAsync(logRepo, snapshot.BusinessId, snapshot.AppointmentId,
+                snapshot.CustomerPhone, snapshot.CustomerName,
+                Domain.Entities.WhatsAppMessageType.Confirmation, success: false, error: "max retries exceeded");
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "WhatsApp confirmation failed for appointment {Id}", snapshot.AppointmentId);
+        }
+    }
+
+    private async Task SendOwnerWhatsAppNotificationAsync(OwnerWaNotificationSnapshot snap)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var sp = scope.ServiceProvider;
+        var logger = sp.GetRequiredService<ILogger<AppointmentService>>();
+        try
+        {
+            var phone = PhoneNormalizer.NormalizeForWaMe(snap.OwnerPhone);
+            if (phone is null) return;
+
+            var sessionRepo = sp.GetRequiredService<IWhatsAppSessionRepository>();
+            var session = await sessionRepo.GetByBusinessIdAsync(snap.BusinessId);
+            if (session?.Status != Domain.Entities.WhatsAppSessionStatus.Connected) return;
+
+            var date = snap.AppointmentDate.ToString("dd/MM/yyyy");
+            var time = snap.AppointmentDate.ToString("hh:mm tt");
+            var body = $"📅 *Nueva cita reservada*\n" +
+                       $"👤 Cliente: {snap.CustomerName}\n" +
+                       $"💼 Servicio: {snap.ServiceName}\n" +
+                       $"🙋 Empleado: {snap.EmployeeName}\n" +
+                       $"📅 Fecha: {date} a las {time}\n" +
+                       $"⏱ Duración: {snap.DurationMinutes} min\n" +
+                       (snap.CustomerPhone != null ? $"📞 Teléfono: {snap.CustomerPhone}" : "");
+
+            var waClient = sp.GetRequiredService<IWhatsAppClient>();
+            await waClient.SendTestMessageAsync(snap.BusinessId, phone, body);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Owner WA notification failed for business {Id}", snap.BusinessId);
         }
     }
 
@@ -345,7 +421,7 @@ public class AppointmentService
         }
     }
 
-    public async Task MarkWhatsAppReminderSentAsync(Guid id, Guid businessId)
+    public async Task<(bool Sent, string? Error)> SendManualWhatsAppReminderAsync(Guid id, Guid businessId)
     {
         var appointment = await _appointmentRepository.GetByIdAsync(id)
             ?? throw new NotFoundException($"Appointment '{id}' not found.");
@@ -353,8 +429,85 @@ public class AppointmentService
         if (appointment.BusinessId != businessId)
             throw new ForbiddenException("Appointment does not belong to this business.");
 
+        if (string.IsNullOrEmpty(appointment.CustomerPhone))
+            return (false, "El cliente no tiene número de WhatsApp registrado.");
+
+        if (!_features.WhatsAppAutomation)
+            return (false, "La automatización de WhatsApp no está habilitada en este servidor.");
+
+        var phone = PhoneNormalizer.NormalizeForWaMe(appointment.CustomerPhone);
+        if (phone is null)
+            return (false, "Número de teléfono inválido.");
+
+        using var scope = _scopeFactory.CreateScope();
+        var sp = scope.ServiceProvider;
+
+        var sessionRepo = sp.GetRequiredService<IWhatsAppSessionRepository>();
+        var session = await sessionRepo.GetByBusinessIdAsync(businessId);
+        if (session is null || session.Status != Domain.Entities.WhatsAppSessionStatus.Connected)
+            return (false, "La sesión de WhatsApp no está conectada. Conéctala desde el panel.");
+
+        var blacklistRepo = sp.GetRequiredService<IWhatsAppBlacklistRepository>();
+        if (await blacklistRepo.IsBlockedAsync(businessId, phone))
+            return (false, "Este número se ha dado de baja (BAJA).");
+
+        var business = await _businessRepository.GetByIdAsync(businessId);
+        var service = await _serviceRepository.GetByIdAsync(appointment.ServiceId);
+
+        var tokenExpires = DateTimeOffset.UtcNow.AddHours(48);
+        var confirmUrl = BuildActionUrl(appointment.Id, AppointmentAction.Confirm, tokenExpires);
+        var cancelUrl = BuildActionUrl(appointment.Id, AppointmentAction.Cancel, tokenExpires);
+
+        var body = WhatsAppTemplateRenderer.Render(
+            business?.WhatsAppReminderTemplate,
+            appointment.CustomerName,
+            business?.Name ?? "",
+            service?.Name ?? "",
+            appointment.AppointmentDate,
+            confirmUrl,
+            cancelUrl,
+            appointment.Id);
+
+        var waClient = sp.GetRequiredService<IWhatsAppClient>();
+        var logRepo  = sp.GetRequiredService<IWhatsAppLogRepository>();
+        var ok = await waClient.SendTestMessageAsync(businessId, phone, body);
+
+        await WriteLogAsync(logRepo, businessId, appointment.Id,
+            appointment.CustomerPhone!, appointment.CustomerName,
+            Domain.Entities.WhatsAppMessageType.ManualReminder, ok,
+            ok ? null : "send failed", senderPhone: session.PhoneNumber);
+
+        if (!ok)
+            return (false, "Error al enviar el mensaje. Verifica que la sesión esté activa.");
+
         appointment.WhatsAppReminderSent = true;
         await _appointmentRepository.SaveChangesAsync();
+        return (true, null);
+    }
+
+    private static async Task WriteLogAsync(
+        IWhatsAppLogRepository repo, Guid businessId, Guid? appointmentId,
+        string phone, string name, Domain.Entities.WhatsAppMessageType type,
+        bool success, string? error = null, string? senderPhone = null)
+    {
+        try
+        {
+            await repo.AddAsync(new Domain.Entities.WhatsAppLog
+            {
+                Id = Guid.NewGuid(),
+                BusinessId = businessId,
+                AppointmentId = appointmentId,
+                SenderPhone = senderPhone,
+                RecipientPhone = phone,
+                RecipientName = name,
+                MessageType = type,
+                Success = success,
+                ErrorReason = error,
+                SentAt = DateTime.UtcNow.AddHours(-6), // store as El Salvador wall-clock (UTC-6, no DST)
+            });
+            await repo.SaveChangesAsync();
+        }
+        catch { /* logging must never break the main flow */ }
     }
 
     // Returns UTC window for "tomorrow" in El Salvador (UTC-6, no DST)

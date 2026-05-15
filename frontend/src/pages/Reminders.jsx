@@ -26,6 +26,8 @@ export default function Reminders() {
   const [reminders, setReminders] = useState([])
   const [loading, setLoading] = useState(true)
   const [sentIds, setSentIds] = useState(new Set())
+  const [sendingIds, setSendingIds] = useState(new Set())
+  const [errorMap, setErrorMap] = useState(new Map())
   const [autoEnabled, setAutoEnabled] = useState(false)
 
   const load = useCallback(async () => {
@@ -51,10 +53,18 @@ export default function Reminders() {
 
   useEffect(() => { load() }, [load])
 
-  const handleSend = (reminder) => {
-    window.open(reminder.whatsAppUrl, '_blank', 'noopener,noreferrer')
-    setSentIds((prev) => new Set([...prev, reminder.appointmentId]))
-    markWhatsAppReminderSent(reminder.appointmentId, business.id).catch(() => {})
+  const handleSend = async (reminder) => {
+    if (sendingIds.has(reminder.appointmentId)) return
+    setSendingIds((prev) => new Set([...prev, reminder.appointmentId]))
+    setErrorMap((prev) => { const m = new Map(prev); m.delete(reminder.appointmentId); return m })
+    try {
+      await markWhatsAppReminderSent(reminder.appointmentId, business.id)
+      setSentIds((prev) => new Set([...prev, reminder.appointmentId]))
+    } catch (err) {
+      setErrorMap((prev) => new Map([...prev, [reminder.appointmentId, err.message ?? 'Error al enviar']]))
+    } finally {
+      setSendingIds((prev) => { const s = new Set(prev); s.delete(reminder.appointmentId); return s })
+    }
   }
 
   if (!business) {
@@ -125,6 +135,8 @@ export default function Reminders() {
                     reminder={r}
                     onSend={handleSend}
                     sent={false}
+                    sending={sendingIds.has(r.appointmentId)}
+                    errorMsg={errorMap.get(r.appointmentId)}
                     autoEnabled={autoEnabled}
                   />
                 ))}
@@ -144,6 +156,8 @@ export default function Reminders() {
                     reminder={r}
                     onSend={handleSend}
                     sent
+                    sending={sendingIds.has(r.appointmentId)}
+                    errorMsg={errorMap.get(r.appointmentId)}
                     autoEnabled={autoEnabled}
                   />
                 ))}
@@ -155,15 +169,14 @@ export default function Reminders() {
 
       {!autoEnabled && (
         <p className="text-xs text-gray-400 mt-6 text-center">
-          Al hacer clic en "Enviar WhatsApp" se abrirá la app con el mensaje listo.
-          Solo deberás presionar Enviar.
+          El mensaje se envía desde el número conectado en la sesión de WhatsApp.
         </p>
       )}
     </div>
   )
 }
 
-function ReminderRow({ reminder, onSend, sent, autoEnabled }) {
+function ReminderRow({ reminder, onSend, sent, sending, errorMsg, autoEnabled }) {
   const initials = reminder.customerName
     .split(' ')
     .slice(0, 2)
@@ -172,46 +185,59 @@ function ReminderRow({ reminder, onSend, sent, autoEnabled }) {
     .toUpperCase()
 
   return (
-    <div className="flex items-center justify-between px-5 py-4 gap-3">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-          {initials}
-        </div>
-        <div className="min-w-0">
-          <p className="font-medium text-gray-800 text-sm truncate">{reminder.customerName}</p>
-          <p className="text-xs text-gray-500 truncate">
-            {reminder.serviceName}
-            <span className="mx-1">·</span>
-            {formatLocalTime(reminder.appointmentDateUtc)}
-          </p>
-          <p className="text-xs text-gray-400">{reminder.customerPhone}</p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {sent && (
-          <div className="flex items-center gap-1 text-green-600">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m5 13 4 4L19 7" />
-            </svg>
-            <span className="text-xs font-medium">Enviado</span>
+    <div className="px-5 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+            {initials}
           </div>
-        )}
-        <button
-          onClick={() => onSend(reminder)}
-          title={autoEnabled && !sent ? 'Envío automático activo — click para enviar manualmente ahora' : undefined}
-          className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${
-            sent
-              ? 'bg-gray-100 hover:bg-green-50 text-gray-500 hover:text-green-700'
-              : autoEnabled
+          <div className="min-w-0">
+            <p className="font-medium text-gray-800 text-sm truncate">{reminder.customerName}</p>
+            <p className="text-xs text-gray-500 truncate">
+              {reminder.serviceName}
+              <span className="mx-1">·</span>
+              {formatLocalTime(reminder.appointmentDateUtc)}
+            </p>
+            <p className="text-xs text-gray-400">{reminder.customerPhone}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {sent && !errorMsg && (
+            <div className="flex items-center gap-1 text-green-600">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m5 13 4 4L19 7" />
+              </svg>
+              <span className="text-xs font-medium">Enviado</span>
+            </div>
+          )}
+          <button
+            onClick={() => onSend(reminder)}
+            disabled={sending}
+            title={autoEnabled && !sent ? 'Envío automático activo — click para enviar manualmente ahora' : undefined}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+              sent
                 ? 'bg-gray-100 hover:bg-green-50 text-gray-500 hover:text-green-700'
-                : 'bg-green-500 hover:bg-green-600 text-white'
-          }`}
-        >
-          <WhatsAppIcon className="w-4 h-4" />
-          <span>{sent ? 'Reenviar' : autoEnabled ? 'Manual' : 'Enviar'}</span>
-        </button>
+                : autoEnabled
+                  ? 'bg-gray-100 hover:bg-green-50 text-gray-500 hover:text-green-700'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+            }`}
+          >
+            {sending ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+            ) : (
+              <WhatsAppIcon className="w-4 h-4" />
+            )}
+            <span>{sending ? 'Enviando…' : sent ? 'Reenviar' : autoEnabled ? 'Manual' : 'Enviar'}</span>
+          </button>
+        </div>
       </div>
+      {errorMsg && (
+        <p className="mt-1.5 ml-12 text-xs text-red-500">{errorMsg}</p>
+      )}
     </div>
   )
 }
