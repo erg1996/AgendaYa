@@ -12,6 +12,7 @@ import BookingConfirmation from './pages/BookingConfirmation'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Reminders from './pages/Reminders'
+import WhatsAppHistory from './pages/WhatsAppHistory'
 import AdminLayout from './pages/AdminLayout'
 import AdminOverview from './pages/AdminOverview'
 import AdminBusinesses from './pages/AdminBusinesses'
@@ -61,6 +62,7 @@ function Layout() {
           <Route path="/book" element={<BookAppointment />} />
           <Route path="/appointments" element={<AppointmentsList />} />
           <Route path="/reminders" element={<Reminders />} />
+          <Route path="/whatsapp-history" element={<WhatsAppHistory />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminOverview />} />
             <Route path="businesses" element={<AdminBusinesses />} />

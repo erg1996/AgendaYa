@@ -9,15 +9,17 @@ import {
   PencilIcon,
   BellIcon,
   ShieldIcon,
+  WhatsAppIcon,
 } from './Icons'
 
 const links = [
-  { to: '/',            label: 'Dashboard',     Icon: ChartIcon },
-  { to: '/business',    label: 'Mi Negocio',    Icon: StoreIcon },
-  { to: '/calendar',    label: 'Calendario',    Icon: CalendarIcon },
-  { to: '/appointments',label: 'Citas',         Icon: ListIcon },
-  { to: '/reminders',   label: 'Recordatorios', Icon: BellIcon },
-  { to: '/book',        label: 'Reservar',      Icon: PencilIcon },
+  { to: '/',                 label: 'Dashboard',     Icon: ChartIcon },
+  { to: '/business',         label: 'Mi Negocio',    Icon: StoreIcon },
+  { to: '/calendar',         label: 'Calendario',    Icon: CalendarIcon },
+  { to: '/appointments',     label: 'Citas',         Icon: ListIcon },
+  { to: '/reminders',        label: 'Recordatorios', Icon: BellIcon },
+  { to: '/whatsapp-history', label: 'WA Enviados',   Icon: WhatsAppIcon },
+  { to: '/book',             label: 'Reservar',      Icon: PencilIcon },
 ]
 
 export default function Navbar() {

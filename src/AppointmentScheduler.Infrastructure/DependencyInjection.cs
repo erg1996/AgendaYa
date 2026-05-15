@@ -39,9 +39,14 @@ public static class DependencyInjection
         services.AddScoped<IBlockedDateRepository, BlockedDateRepository>();
         services.AddScoped<IUserBusinessRepository, UserBusinessRepository>();
         services.AddScoped<IAdminRepository, AdminRepository>();
+        services.AddScoped<IWhatsAppSessionRepository, WhatsAppSessionRepository>();
+        services.AddScoped<IWhatsAppBlacklistRepository, WhatsAppBlacklistRepository>();
+        services.AddScoped<IWhatsAppLogRepository, WhatsAppLogRepository>();
+        services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 
         // Application services
         services.AddScoped<BusinessService>();
+        services.AddScoped<EmployeeManagementService>();
         services.AddScoped<ServiceService>();
         services.AddScoped<WorkingHoursService>();
         services.AddScoped<AvailabilityService>();
@@ -54,6 +59,11 @@ public static class DependencyInjection
         services.AddScoped<AdminService>();
         services.AddScoped<BlockedDateService>();
         services.AddScoped<IEmailService, SmtpEmailService>();
+
+        // WhatsApp automation
+        services.Configure<WhatsAppOptions>(configuration.GetSection("WhatsApp"));
+        services.Configure<FeatureFlags>(configuration.GetSection("Features"));
+        services.AddHttpClient<IWhatsAppClient, WhatsAppClient>();
         services.AddScoped<AuthService>(sp =>
         {
             var userRepo = sp.GetRequiredService<IUserRepository>();

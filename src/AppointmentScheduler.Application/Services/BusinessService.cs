@@ -98,6 +98,19 @@ public class BusinessService
             business.Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
         }
 
+        if (request.OwnerNotifyEmail.HasValue)
+            business.OwnerNotifyEmail = request.OwnerNotifyEmail.Value;
+        if (request.OwnerNotifyWhatsApp.HasValue)
+        {
+            business.OwnerNotifyWhatsApp = request.OwnerNotifyWhatsApp.Value;
+            // Sync phone whenever the WA toggle is explicitly saved so null clears it.
+            business.OwnerNotifyPhone = string.IsNullOrWhiteSpace(request.OwnerNotifyPhone) ? null : request.OwnerNotifyPhone!.Trim();
+        }
+        else if (request.OwnerNotifyPhone != null)
+        {
+            business.OwnerNotifyPhone = string.IsNullOrWhiteSpace(request.OwnerNotifyPhone) ? null : request.OwnerNotifyPhone.Trim();
+        }
+
         await _repository.SaveChangesAsync();
 
         return ToResponse(business);
@@ -111,7 +124,7 @@ public class BusinessService
     }
 
     private static BusinessResponse ToResponse(Business b) =>
-        new(b.Id, b.Name, b.Slug, b.LogoUrl, b.BrandColor, b.WhatsAppReminderTemplate, b.CreatedAt, b.Address, b.Latitude, b.Longitude);
+        new(b.Id, b.Name, b.Slug, b.LogoUrl, b.BrandColor, b.WhatsAppReminderTemplate, b.CreatedAt, b.Address, b.Latitude, b.Longitude, b.OwnerNotifyEmail, b.OwnerNotifyWhatsApp, b.OwnerNotifyPhone);
 
     public static string GenerateSlug(string name)
     {

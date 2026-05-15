@@ -53,6 +53,9 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                     b.Property<int>("DurationMinutes")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -70,6 +73,16 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
+                    b.Property<bool>("WhatsAppOptIn")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("WhatsAppReminderFailed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("WhatsAppReminderSent")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -80,6 +93,8 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                     b.HasIndex("ServiceId");
 
                     b.HasIndex("BusinessId", "AppointmentDate");
+
+                    b.HasIndex("EmployeeId", "AppointmentDate");
 
                     b.ToTable("Appointments");
                 });
@@ -141,6 +156,20 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<bool>("OwnerNotifyEmail")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("OwnerNotifyPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<bool>("OwnerNotifyWhatsApp")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -156,6 +185,79 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Businesses");
+                });
+
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.Employee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AvatarUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("#6366f1");
+
+                    b.Property<decimal>("CommissionPercent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(5,2)")
+                        .HasDefaultValue(100m);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Specialization")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessId");
+
+                    b.ToTable("Employees");
+                });
+
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.EmployeeServiceLink", b =>
+                {
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("OverrideDurationMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("OverridePrice")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.HasKey("EmployeeId", "ServiceId");
+
+                    b.HasIndex("ServiceId");
+
+                    b.ToTable("EmployeeServiceLinks");
                 });
 
             modelBuilder.Entity("AppointmentScheduler.Domain.Entities.Service", b =>
@@ -247,6 +349,77 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                     b.ToTable("UserBusinesses");
                 });
 
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WhatsAppBlacklist", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NormalizedPhone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessId", "NormalizedPhone")
+                        .IsUnique();
+
+                    b.ToTable("WhatsAppBlacklists");
+                });
+
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WhatsAppLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AppointmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ErrorReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("MessageType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RecipientName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("RecipientPhone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("SenderPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessId", "SentAt");
+
+                    b.ToTable("WhatsAppLogs");
+                });
+
             modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WhatsAppMessageTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -278,17 +451,71 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                     b.ToTable("WhatsAppMessageTemplates");
                 });
 
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WhatsAppSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("AutoRemindersEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("FirstConnectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastConnectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("LastQrGeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessId")
+                        .IsUnique();
+
+                    b.ToTable("WhatsAppSessions");
+                });
+
             modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WorkingHours", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("BusinessId")
-                        .HasColumnType("uuid");
-
                     b.Property<int>("DayOfWeek")
                         .HasColumnType("integer");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
 
                     b.Property<TimeSpan>("EndTime")
                         .HasColumnType("interval");
@@ -298,8 +525,7 @@ namespace AppointmentScheduler.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BusinessId", "DayOfWeek")
-                        .IsUnique();
+                    b.HasIndex("EmployeeId", "DayOfWeek");
 
                     b.ToTable("WorkingHours");
                 });
@@ -312,6 +538,12 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("AppointmentScheduler.Domain.Entities.Employee", "Employee")
+                        .WithMany("Appointments")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("AppointmentScheduler.Domain.Entities.Service", "Service")
                         .WithMany()
                         .HasForeignKey("ServiceId")
@@ -319,6 +551,8 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Business");
+
+                    b.Navigation("Employee");
 
                     b.Navigation("Service");
                 });
@@ -332,6 +566,36 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Business");
+                });
+
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.Employee", b =>
+                {
+                    b.HasOne("AppointmentScheduler.Domain.Entities.Business", "Business")
+                        .WithMany("Employees")
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Business");
+                });
+
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.EmployeeServiceLink", b =>
+                {
+                    b.HasOne("AppointmentScheduler.Domain.Entities.Employee", "Employee")
+                        .WithMany("EmployeeServices")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AppointmentScheduler.Domain.Entities.Service", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Service");
                 });
 
             modelBuilder.Entity("AppointmentScheduler.Domain.Entities.Service", b =>
@@ -375,7 +639,40 @@ namespace AppointmentScheduler.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WhatsAppBlacklist", b =>
+                {
+                    b.HasOne("AppointmentScheduler.Domain.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Business");
+                });
+
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WhatsAppLog", b =>
+                {
+                    b.HasOne("AppointmentScheduler.Domain.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Business");
+                });
+
             modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WhatsAppMessageTemplate", b =>
+                {
+                    b.HasOne("AppointmentScheduler.Domain.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Business");
+                });
+
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WhatsAppSession", b =>
                 {
                     b.HasOne("AppointmentScheduler.Domain.Entities.Business", "Business")
                         .WithMany()
@@ -388,13 +685,13 @@ namespace AppointmentScheduler.Infrastructure.Migrations
 
             modelBuilder.Entity("AppointmentScheduler.Domain.Entities.WorkingHours", b =>
                 {
-                    b.HasOne("AppointmentScheduler.Domain.Entities.Business", "Business")
+                    b.HasOne("AppointmentScheduler.Domain.Entities.Employee", "Employee")
                         .WithMany("WorkingHours")
-                        .HasForeignKey("BusinessId")
+                        .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Business");
+                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("AppointmentScheduler.Domain.Entities.Business", b =>
@@ -403,9 +700,18 @@ namespace AppointmentScheduler.Infrastructure.Migrations
 
                     b.Navigation("BlockedDates");
 
+                    b.Navigation("Employees");
+
                     b.Navigation("Services");
 
                     b.Navigation("UserBusinesses");
+                });
+
+            modelBuilder.Entity("AppointmentScheduler.Domain.Entities.Employee", b =>
+                {
+                    b.Navigation("Appointments");
+
+                    b.Navigation("EmployeeServices");
 
                     b.Navigation("WorkingHours");
                 });

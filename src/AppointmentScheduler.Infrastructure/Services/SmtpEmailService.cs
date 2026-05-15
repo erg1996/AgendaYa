@@ -212,4 +212,151 @@ public class SmtpEmailService : IEmailService
             _logger.LogError(ex, "Failed to send reminder email to {Email}", toEmail);
         }
     }
+
+    public async Task SendNewBookingNotificationAsync(
+        string toEmail,
+        string businessName,
+        string customerName,
+        string serviceName,
+        string employeeName,
+        DateTime appointmentDate,
+        int durationMinutes,
+        string? customerPhone = null,
+        string? customerEmail = null,
+        string? brandColor = null,
+        string? logoUrl = null)
+    {
+        var smtpHost = Environment.GetEnvironmentVariable("SMTP_HOST");
+        if (string.IsNullOrEmpty(smtpHost))
+        {
+            _logger.LogWarning("Email not configured. Skipping owner booking notification to {Email}", toEmail);
+            return;
+        }
+
+        var smtpPort = int.Parse(Environment.GetEnvironmentVariable("SMTP_PORT") ?? "587");
+        var fromEmail = Environment.GetEnvironmentVariable("SMTP_FROM") ?? "noreply@agendaya.app";
+        var fromName  = Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "AgendaYa";
+        var username  = Environment.GetEnvironmentVariable("SMTP_USERNAME") ?? "";
+        var password  = Environment.GetEnvironmentVariable("SMTP_PASSWORD") ?? "";
+
+        var endTime  = appointmentDate.AddMinutes(durationMinutes);
+        var dateStr  = appointmentDate.ToString("dddd, dd 'de' MMMM 'de' yyyy", new System.Globalization.CultureInfo("es"));
+        var timeStr  = $"{appointmentDate:HH:mm} — {endTime:HH:mm}";
+        var color    = brandColor ?? "#16A34A";
+        var logoHtml = !string.IsNullOrEmpty(logoUrl)
+            ? $"<img src='{logoUrl}' alt='{businessName}' style='width:50px;height:50px;border-radius:10px;object-fit:cover;margin-bottom:10px;border:2px solid rgba(255,255,255,0.3);'/><br/>"
+            : "";
+        var contactRows = "";
+        if (!string.IsNullOrEmpty(customerPhone))
+            contactRows += $"<tr><td style='padding:8px 0;color:#6B7280;width:120px;'>Teléfono:</td><td style='padding:8px 0;color:#111827;font-weight:600;'>{customerPhone}</td></tr>";
+        if (!string.IsNullOrEmpty(customerEmail))
+            contactRows += $"<tr><td style='padding:8px 0;color:#6B7280;'>Email:</td><td style='padding:8px 0;color:#111827;font-weight:600;'>{customerEmail}</td></tr>";
+
+        var subject = $"Nueva cita — {customerName} · {serviceName}";
+        var body = $@"
+<html>
+<body style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;'>
+  <div style='background:{color};color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;'>
+    {logoHtml}
+    <h1 style='margin:0;font-size:20px;'>{businessName}</h1>
+    <p style='margin:4px 0 0;opacity:0.9;font-size:14px;'>Nueva cita agendada</p>
+  </div>
+  <div style='background:#F9FAFB;padding:24px;border:1px solid #E5E7EB;border-top:none;border-radius:0 0 12px 12px;'>
+    <p style='color:#374151;font-size:15px;margin-top:0;'>Se agendó una nueva cita:</p>
+    <div style='background:white;border:1px solid #E5E7EB;border-radius:8px;padding:16px;'>
+      <table style='width:100%;border-collapse:collapse;'>
+        <tr><td style='padding:8px 0;color:#6B7280;width:120px;'>Cliente:</td><td style='padding:8px 0;color:#111827;font-weight:700;'>{customerName}</td></tr>
+        <tr><td style='padding:8px 0;color:#6B7280;'>Servicio:</td><td style='padding:8px 0;color:#111827;font-weight:600;'>{serviceName}</td></tr>
+        <tr><td style='padding:8px 0;color:#6B7280;'>Empleado:</td><td style='padding:8px 0;color:#111827;font-weight:600;'>{employeeName}</td></tr>
+        <tr><td style='padding:8px 0;color:#6B7280;'>Fecha:</td><td style='padding:8px 0;color:#111827;font-weight:600;'>{dateStr}</td></tr>
+        <tr><td style='padding:8px 0;color:#6B7280;'>Hora:</td><td style='padding:8px 0;color:#111827;font-weight:600;'>{timeStr}</td></tr>
+        {contactRows}
+      </table>
+    </div>
+  </div>
+  <p style='color:#9CA3AF;font-size:12px;text-align:center;margin-top:16px;'>Enviado por AgendaYa</p>
+</body>
+</html>";
+
+        try
+        {
+            using var smtp = new SmtpClient(smtpHost, smtpPort);
+            smtp.EnableSsl = true;
+            if (!string.IsNullOrEmpty(username))
+                smtp.Credentials = new NetworkCredential(username, password);
+
+            var message = new MailMessage
+            {
+                From = new MailAddress(fromEmail, fromName),
+                Subject = subject,
+                Body = body,
+                IsBodyHtml = true
+            };
+            message.To.Add(new MailAddress(toEmail));
+            await smtp.SendMailAsync(message);
+            _logger.LogInformation("Owner booking notification sent to {Email}", toEmail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send owner booking notification to {Email}", toEmail);
+        }
+    }
+
+    public async Task SendWhatsAppSessionDownAsync(
+        string toEmail,
+        string businessName,
+        string? phoneNumber,
+        string estado,
+        CancellationToken ct = default)
+    {
+        var smtpHost = Environment.GetEnvironmentVariable("SMTP_HOST");
+        if (string.IsNullOrEmpty(smtpHost))
+        {
+            _logger.LogWarning("Email not configured. Skipping session-down notification to {Email}", toEmail);
+            return;
+        }
+
+        var smtpPort  = int.Parse(Environment.GetEnvironmentVariable("SMTP_PORT") ?? "587");
+        var fromEmail = Environment.GetEnvironmentVariable("SMTP_FROM") ?? "noreply@agendaya.app";
+        var fromName  = Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "AgendaYa";
+        var username  = Environment.GetEnvironmentVariable("SMTP_USERNAME") ?? "";
+        var password  = Environment.GetEnvironmentVariable("SMTP_PASSWORD") ?? "";
+
+        var phoneStr = string.IsNullOrEmpty(phoneNumber) ? "desconocido" : phoneNumber;
+        var subject  = $"Alerta: Sesión WhatsApp {estado} - {businessName}";
+        var body     = $@"
+<html><body style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;'>
+  <div style='background:#EF4444;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;'>
+    <h1 style='margin:0;font-size:20px;'>Sesión WhatsApp {estado}</h1>
+  </div>
+  <div style='background:#FFF7F7;padding:20px;border:1px solid #FCA5A5;border-top:none;border-radius:0 0 12px 12px;'>
+    <p>La sesión de WhatsApp de <strong>{businessName}</strong> (número: {phoneStr}) está <strong>{estado}</strong>.</p>
+    <p>Los recordatorios automáticos no se enviarán hasta que vuelvas a conectar la sesión desde el panel de administración.</p>
+  </div>
+  <p style='color:#9CA3AF;font-size:12px;text-align:center;margin-top:16px;'>Enviado por AgendaYa</p>
+</body></html>";
+
+        try
+        {
+            using var smtp = new SmtpClient(smtpHost, smtpPort);
+            smtp.EnableSsl = true;
+            if (!string.IsNullOrEmpty(username))
+                smtp.Credentials = new NetworkCredential(username, password);
+
+            var message = new MailMessage
+            {
+                From = new MailAddress(fromEmail, fromName),
+                Subject = subject,
+                Body = body,
+                IsBodyHtml = true
+            };
+            message.To.Add(new MailAddress(toEmail));
+            await smtp.SendMailAsync(message, ct);
+            _logger.LogInformation("Session-down alert sent to {Email}", toEmail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send session-down alert to {Email}", toEmail);
+        }
+    }
 }

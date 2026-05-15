@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   getBusinessBySlug,
+  getBusinessWhatsAppActive,
   getServices,
   getAvailability,
   createAppointment,
 } from '../api/client'
+import { formatWallTime, formatWallDateLong, wallClockHour, todayDateKey } from '../api/dateTime'
 import { ClockIcon, AgendaYaLogo } from '../components/Icons'
 import LocationMap from '../components/LocationMap'
 
@@ -32,11 +34,25 @@ function hexWithAlpha(hex, alpha) {
 const fmtPrice = (p) =>
   p != null ? `$${Number(p).toLocaleString('es', { minimumFractionDigits: 0 })}` : null
 
-const fmtTime = (iso) =>
-  new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+const fmtTime = formatWallTime
+const fmtDateLong = formatWallDateLong
 
-const fmtDateLong = (iso) =>
-  new Date(iso).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })
+function translateBookingError(msg) {
+  if (!msg) return msg
+  if (msg.includes('already passed') || msg.includes('ya pasó') || msg.includes('time slot') && msg.includes('past'))
+    return 'La fecha de la cita ya pasó. Por favor selecciona otro horario.'
+  if (msg.includes('conflicts') || msg.includes('conflict'))
+    return 'Ese horario ya fue reservado. Por favor elige otro.'
+  if (msg.includes('working hours') || msg.includes('outside'))
+    return 'El horario seleccionado está fuera del horario de atención.'
+  if (msg.includes('no active employee') || msg.includes('No active employee'))
+    return 'No hay empleados disponibles para este servicio.'
+  if (msg.includes('not found') || msg.includes('Not found'))
+    return 'El servicio o negocio ya no está disponible.'
+  if (msg.includes('Network') || msg.includes('fetch'))
+    return 'Error de conexión. Verifica tu internet e intenta de nuevo.'
+  return msg
+}
 
 const STEP_LABELS = ['Servicio', 'Horario', 'Datos']
 const DAY_NAMES = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do']
@@ -47,7 +63,7 @@ const MONTH_NAMES = [
 
 // ── Mini Calendar ────────────────────────────────────────────────────────────
 function MiniCalendar({ value, onChange, brand, onBrand }) {
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = todayDateKey()
   const todayDate = new Date(todayStr + 'T00:00:00')
 
   const [cursor, setCursor] = useState(() => {
@@ -173,9 +189,13 @@ export default function PublicBooking() {
   const [step, setStep] = useState(1)
   const [selectedService, setSelectedService] = useState(null)
   const [date, setDate] = useState('')
+  const [allSlots, setAllSlots] = useState([])
   const [slots, setSlots] = useState([])
+  const [employeeOptions, setEmployeeOptions] = useState([])
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState(null)
+  const [selectedEmployeeForSlot, setSelectedEmployeeForSlot] = useState(null)
   const [customerName, setCustomerName] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -187,10 +207,15 @@ export default function PublicBooking() {
 
   const loadBusiness = async () => {
     try {
-      const biz = await getBusinessBySlug(slug)
+      const [biz, waStatus] = await Promise.all([
+        getBusinessBySlug(slug),
+        getBusinessWhatsAppActive(slug),
+      ])
       setBusiness(biz)
       const svcs = await getServices(biz.id)
       setServices(svcs)
+      // Pre-check WhatsApp consent if the business has an active session
+      if (waStatus?.active) setWhatsAppConsent(true)
     } catch {
       setError('Negocio no encontrado')
     } finally {
@@ -207,8 +232,27 @@ export default function PublicBooking() {
     setSelectedService(svc)
     setStep(2)
     setSelectedSlot(null)
+    setAllSlots([])
     setSlots([])
     setDate('')
+    setEmployeeOptions([])
+    setSelectedEmployeeId(null)
+  }
+
+  const filterSlots = (raw, empId, d) => {
+    const today = todayDateKey()
+    let filtered = empId
+      ? raw.filter(s => s.availableEmployees?.some(e => e.id === empId))
+      : raw
+    if (d === today) {
+      const now = new Date()
+      const nowHm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      filtered = filtered.filter(s => {
+        const m = String(s.startTime).match(/T(\d{2}:\d{2})/)
+        return m ? m[1] > nowHm : true
+      })
+    }
+    return filtered
   }
 
   const handleDateChange = async (d) => {
@@ -218,16 +262,35 @@ export default function PublicBooking() {
     setSelectedSlot(null)
     try {
       const data = await getAvailability(business.id, d, selectedService.id)
-      setSlots(data)
+      setAllSlots(data)
+      // Collect unique employees across all slots
+      const empMap = new Map()
+      data.forEach(s => s.availableEmployees?.forEach(e => empMap.set(e.id, e)))
+      setEmployeeOptions([...empMap.values()])
+      setSlots(filterSlots(data, selectedEmployeeId, d))
     } catch {
+      setAllSlots([])
       setSlots([])
     } finally {
       setLoadingSlots(false)
     }
   }
 
+  const handleEmployeeSelect = (empId) => {
+    setSelectedEmployeeId(empId)
+    setSlots(filterSlots(allSlots, empId, date))
+    setSelectedSlot(null)
+  }
+
   const selectSlot = (slot) => {
     setSelectedSlot(slot)
+    // Determine which employee handles this slot
+    const emp = selectedEmployeeId
+      ? slot.availableEmployees?.find(e => e.id === selectedEmployeeId) ?? null
+      : slot.availableEmployees?.length === 1
+        ? slot.availableEmployees[0]
+        : null
+    setSelectedEmployeeForSlot(emp)
     setStep(3)
   }
 
@@ -244,10 +307,12 @@ export default function PublicBooking() {
       await createAppointment({
         businessId: business.id,
         serviceId: selectedService.id,
+        employeeId: selectedEmployeeId ?? null,
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim() || null,
         customerPhone: whatsAppConsent && customerPhone.trim() ? customerPhone.trim() : null,
         appointmentDate: selectedSlot.startTime,
+        whatsAppOptIn: whatsAppConsent && !!customerPhone.trim(),
       })
       navigate(`/book/${slug}/confirmed`, {
         state: {
@@ -264,7 +329,7 @@ export default function PublicBooking() {
         },
       })
     } catch (err) {
-      setBookingError(err.message)
+      setBookingError(translateBookingError(err.message))
     } finally {
       setBooking(false)
     }
@@ -297,9 +362,9 @@ export default function PublicBooking() {
     ? (business.logoUrl.startsWith('http') ? business.logoUrl : `${import.meta.env.VITE_API_URL ?? ''}${business.logoUrl}`)
     : null
 
-  // slot groups
-  const morningSlots = slots.filter(s => new Date(s.startTime).getHours() < 12)
-  const afternoonSlots = slots.filter(s => new Date(s.startTime).getHours() >= 12)
+  // slot groups (use wall-clock hour, not browser-local Date interpretation)
+  const morningSlots = slots.filter(s => wallClockHour(s.startTime) < 12)
+  const afternoonSlots = slots.filter(s => wallClockHour(s.startTime) >= 12)
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#f8fafc' }}>
@@ -501,6 +566,49 @@ export default function PublicBooking() {
               </div>
             )}
 
+            {!loadingSlots && employeeOptions.length > 1 && (
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">
+                  ¿Con quién?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleEmployeeSelect(null)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                    style={selectedEmployeeId === null
+                      ? { background: brand, color: onBrand, borderColor: brand }
+                      : { background: 'white', color: '#6b7280', borderColor: '#d1d5db' }}
+                  >
+                    Cualquier empleado
+                  </button>
+                  {employeeOptions.map(emp => (
+                    <button
+                      key={emp.id}
+                      onClick={() => handleEmployeeSelect(emp.id)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                      style={selectedEmployeeId === emp.id
+                        ? { background: brand, color: onBrand, borderColor: brand }
+                        : { background: 'white', color: '#374151', borderColor: '#d1d5db' }}
+                    >
+                      {emp.avatarUrl ? (
+                        <img src={emp.avatarUrl} alt={emp.name}
+                          className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <span className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
+                          style={{ background: emp.color ?? '#6366f1' }}>
+                          {emp.name?.charAt(0)?.toUpperCase()}
+                        </span>
+                      )}
+                      <span>{emp.name}</span>
+                      {emp.specialization && (
+                        <span className="hidden sm:inline opacity-60">· {emp.specialization}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {!loadingSlots && slots.length > 0 && (
               <div className="space-y-3">
                 {morningSlots.length > 0 && (
@@ -583,6 +691,15 @@ export default function PublicBooking() {
                     {fmtTime(selectedSlot.startTime)} — {fmtTime(selectedSlot.endTime)}
                   </span>
                 </div>
+                {selectedEmployeeForSlot && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Con</span>
+                    <span className="flex items-center gap-1.5 font-medium text-gray-900">
+                      <span className="w-2 h-2 rounded-full" style={{ background: selectedEmployeeForSlot.color ?? '#6366f1' }} />
+                      {selectedEmployeeForSlot.name}
+                    </span>
+                  </div>
+                )}
                 {fmtPrice(selectedService.price) && (
                   <div className="flex justify-between text-sm border-t border-gray-100 pt-2 mt-2">
                     <span className="text-gray-500">Total</span>
@@ -655,7 +772,8 @@ export default function PublicBooking() {
                       style={{ accentColor: brand }}
                     />
                     <span className="text-xs text-gray-500">
-                      Acepto recibir un recordatorio de mi cita por WhatsApp.
+                      Acepto recibir un recordatorio de mi cita por WhatsApp.{' '}
+                      <span className="text-gray-400">Puedes darte de baja respondiendo <strong>BAJA</strong> en cualquier momento.</span>
                     </span>
                   </label>
                 )}

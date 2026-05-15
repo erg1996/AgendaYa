@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AppointmentScheduler.Application\AppointmentScheduler.Application.csproj" />
     <ProjectReference Include="..\AppointmentScheduler.Domain\AppointmentScheduler.Domain.csproj" />
+    <ProjectReference Include="..\AppointmentScheduler.Infrastructure\AppointmentScheduler.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -5,15 +5,20 @@ namespace AppointmentScheduler.Application.DTOs;
 public record CreateAppointmentRequest(
     [Required] Guid BusinessId,
     [Required] Guid ServiceId,
+    Guid? EmployeeId,
     [Required, MaxLength(200)] string CustomerName,
     [EmailAddress, MaxLength(200)] string? CustomerEmail,
     [MaxLength(30)] string? CustomerPhone,
-    [Required] DateTime AppointmentDate);
+    [Required] DateTime AppointmentDate,
+    bool WhatsAppOptIn = false);
 
 public record AppointmentResponse(
     Guid Id,
     Guid BusinessId,
     Guid ServiceId,
+    Guid EmployeeId,
+    string? EmployeeName,
+    string? EmployeeColor,
     string CustomerName,
     string? CustomerEmail,
     string? CustomerPhone,

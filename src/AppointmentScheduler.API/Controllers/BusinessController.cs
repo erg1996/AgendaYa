@@ -1,8 +1,11 @@
 using AppointmentScheduler.API.Extensions;
 using AppointmentScheduler.Application.DTOs;
+using AppointmentScheduler.Application.Interfaces;
 using AppointmentScheduler.Application.Services;
+using AppointmentScheduler.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace AppointmentScheduler.API.Controllers;
 
@@ -11,12 +14,20 @@ namespace AppointmentScheduler.API.Controllers;
 public class BusinessController : ControllerBase
 {
     private readonly BusinessService _service;
+    private readonly IWhatsAppSessionRepository _waSessions;
+    private readonly FeatureFlags _features;
     private readonly ILogger<BusinessController> _logger;
 
-    public BusinessController(BusinessService service, ILogger<BusinessController> logger)
+    public BusinessController(
+        BusinessService service,
+        IWhatsAppSessionRepository waSessions,
+        IOptions<FeatureFlags> features,
+        ILogger<BusinessController> logger)
     {
-        _service = service;
-        _logger = logger;
+        _service    = service;
+        _waSessions = waSessions;
+        _features   = features.Value;
+        _logger     = logger;
     }
 
     // Public: used by public booking page
@@ -25,6 +36,21 @@ public class BusinessController : ControllerBase
     {
         var result = await _service.GetBySlugAsync(slug);
         return Ok(result);
+    }
+
+    // Public: tells the booking page whether WhatsApp auto-reminders are available
+    // so the consent checkbox can be pre-checked. Returns { active: false } gracefully
+    // when the feature flag is off or the session isn't connected.
+    [HttpGet("slug/{slug}/whatsapp-active")]
+    public async Task<IActionResult> GetWhatsAppActive(string slug, CancellationToken ct)
+    {
+        if (!_features.WhatsAppAutomation) return Ok(new { active = false });
+        BusinessResponse business;
+        try { business = await _service.GetBySlugAsync(slug); }
+        catch { return Ok(new { active = false }); }
+        var session = await _waSessions.GetByBusinessIdAsync(business.Id, ct);
+        var active = session?.Status == WhatsAppSessionStatus.Connected && session.AutoRemindersEnabled;
+        return Ok(new { active });
     }
 
     // --- Authenticated endpoints below ---

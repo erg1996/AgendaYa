@@ -1,3 +1,6 @@
 namespace AppointmentScheduler.Application.DTOs;
 
-public record AvailableSlotResponse(DateTime StartTime, DateTime EndTime);
+public record AvailableSlotResponse(
+    DateTime StartTime,
+    DateTime EndTime,
+    List<EmployeeSummary> AvailableEmployees);

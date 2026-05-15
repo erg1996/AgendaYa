@@ -37,6 +37,13 @@ public class AppointmentRepository : IAppointmentRepository
             .Where(a => a.BusinessId == businessId && a.AppointmentDate.Date == date.Date)
             .ToListAsync();
 
+    public async Task<List<Appointment>> GetByEmployeeIdAndDateAsync(Guid employeeId, DateTime date) =>
+        await _context.Appointments
+            .Where(a => a.EmployeeId == employeeId
+                     && a.AppointmentDate.Date == date.Date
+                     && a.Status != AppointmentStatus.Cancelled)
+            .ToListAsync();
+
     public async Task<List<Appointment>> GetByBusinessIdAndDateRangeAsync(Guid businessId, DateTime from, DateTime to) =>
         await _context.Appointments
             .Where(a => a.BusinessId == businessId && a.AppointmentDate >= from && a.AppointmentDate < to)
@@ -122,33 +129,39 @@ public class AppointmentRepository : IAppointmentRepository
     // Atomic: serializable transaction that re-checks for overlap after acquiring
     // a write lock, then inserts. Returns false if a concurrent appointment now
     // conflicts (caller should translate to ConflictException).
+    // Wrapped in CreateExecutionStrategy so NpgsqlRetryingExecutionStrategy can
+    // retry the whole unit on transient failures (required when EnableRetryOnFailure is set).
     public async Task<bool> TryCreateWithOverlapCheckAsync(Appointment appointment)
     {
-        await using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-
-        var newStart = appointment.AppointmentDate;
-        var newEnd = newStart.AddMinutes(appointment.DurationMinutes);
-        var dayStart = newStart.Date;
-        var dayEnd = dayStart.AddDays(1);
-
-        var conflict = await _context.Appointments
-            .Where(a => a.BusinessId == appointment.BusinessId
-                     && a.Status != AppointmentStatus.Cancelled
-                     && a.AppointmentDate >= dayStart
-                     && a.AppointmentDate < dayEnd)
-            .AnyAsync(a => newStart < a.AppointmentDate.AddMinutes(a.DurationMinutes)
-                        && a.AppointmentDate < newEnd);
-
-        if (conflict)
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            await tx.RollbackAsync();
-            return false;
-        }
+            await using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
 
-        await _context.Appointments.AddAsync(appointment);
-        await _context.SaveChangesAsync();
-        await tx.CommitAsync();
-        return true;
+            var newStart = appointment.AppointmentDate;
+            var newEnd = newStart.AddMinutes(appointment.DurationMinutes);
+            var dayStart = newStart.Date;
+            var dayEnd = dayStart.AddDays(1);
+
+            var conflict = await _context.Appointments
+                .Where(a => a.EmployeeId == appointment.EmployeeId
+                         && a.Status != AppointmentStatus.Cancelled
+                         && a.AppointmentDate >= dayStart
+                         && a.AppointmentDate < dayEnd)
+                .AnyAsync(a => newStart < a.AppointmentDate.AddMinutes(a.DurationMinutes)
+                            && a.AppointmentDate < newEnd);
+
+            if (conflict)
+            {
+                await tx.RollbackAsync();
+                return false;
+            }
+
+            await _context.Appointments.AddAsync(appointment);
+            await _context.SaveChangesAsync();
+            await tx.CommitAsync();
+            return true;
+        });
     }
 
     // Atomic claim of reminder send rights. Returns true if this caller claimed
@@ -159,6 +172,23 @@ public class AppointmentRepository : IAppointmentRepository
             .Where(a => a.Id == appointmentId && !a.ReminderSent)
             .ExecuteUpdateAsync(u => u.SetProperty(a => a.ReminderSent, true));
         return affected == 1;
+    }
+
+    public async Task<bool> ClaimWhatsAppReminderAsync(Guid appointmentId)
+    {
+        var affected = await _context.Appointments
+            .Where(a => a.Id == appointmentId && !a.WhatsAppReminderSent && !a.WhatsAppReminderFailed)
+            .ExecuteUpdateAsync(u => u.SetProperty(a => a.WhatsAppReminderSent, true));
+        return affected == 1;
+    }
+
+    public async Task MarkWhatsAppReminderFailedAsync(Guid appointmentId)
+    {
+        await _context.Appointments
+            .Where(a => a.Id == appointmentId)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(a => a.WhatsAppReminderSent, false)
+                .SetProperty(a => a.WhatsAppReminderFailed, true));
     }
 
     public async Task SaveChangesAsync() =>

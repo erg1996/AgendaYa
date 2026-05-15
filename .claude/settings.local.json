@@ -1,7 +1,33 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(xargs grep *)",
+      "Bash(xargs wc *)",
+      "Bash(npm list *)",
+      "Bash(npx --yes md-to-pdf --version)",
+      "Bash(npx md-to-pdf *)",
+      "Bash(dotnet-ef migrations *)",
+      "Bash(grep -E \"\\\\.cs$\")",
+      "Bash(dotnet test *)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(git merge feat/super-admin --no-ff -m ' *)",
+      "Bash(git config *)",
+      "Bash(git push *)",
+      "Bash(npm install *)",
+      "Bash(dotnet ef *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git pull *)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git restore *)",
+      "Bash(git commit *)",
+      "Bash(npm --prefix frontend run build)",
+      "Bash(npm run *)",
+      "Bash(git diff *)",
+      "Bash(ls .github)",
+      "Bash(Select-String nginx *)"
     ]
   }
 }

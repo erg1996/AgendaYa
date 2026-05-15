@@ -12,6 +12,9 @@ public record UpdateBusinessRequest(
     [MaxLength(500)] string? Address,
     double? Latitude,
     double? Longitude,
-    bool ClearLocation = false);
+    bool ClearLocation = false,
+    bool? OwnerNotifyEmail = null,
+    bool? OwnerNotifyWhatsApp = null,
+    [MaxLength(30)] string? OwnerNotifyPhone = null);
 
-public record BusinessResponse(Guid Id, string Name, string Slug, string? LogoUrl, string? BrandColor, string? WhatsAppReminderTemplate, DateTime CreatedAt, string? Address, double? Latitude, double? Longitude);
+public record BusinessResponse(Guid Id, string Name, string Slug, string? LogoUrl, string? BrandColor, string? WhatsAppReminderTemplate, DateTime CreatedAt, string? Address, double? Latitude, double? Longitude, bool OwnerNotifyEmail = true, bool OwnerNotifyWhatsApp = false, string? OwnerNotifyPhone = null);

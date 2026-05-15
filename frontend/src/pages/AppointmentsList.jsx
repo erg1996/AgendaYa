@@ -1,5 +1,6 @@
 import { useBusiness } from '../components/BusinessContext'
 import { updateAppointmentStatus, updateAppointmentNotes, downloadReportCsv } from '../api/client'
+import { formatWallTime, formatWallDateShort, compareWallClock } from '../api/dateTime'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { ListIcon, InboxIcon, XIcon } from '../components/Icons'
@@ -42,8 +43,8 @@ export default function AppointmentsList() {
   }
 
   const getServiceName = (id) => services.find((s) => s.id === id)?.name ?? 'Servicio'
-  const formatDate = (iso) => new Date(iso).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })
-  const formatTime = (iso) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  const formatDate = formatWallDateShort
+  const formatTime = formatWallTime
 
   const handleStatusChange = async (id, newStatus) => {
     setUpdating(id)
@@ -81,7 +82,9 @@ export default function AppointmentsList() {
   }
 
   const filtered = filter === 'all' ? appointments : appointments.filter((a) => a.status === filter)
-  const sorted = [...filtered].sort((a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate))
+  // Sort by wall-clock string descending — works as a string compare since the
+  // format is yyyy-MM-ddTHH:mm:ss (no need to round-trip through Date).
+  const sorted = [...filtered].sort((a, b) => compareWallClock(b.appointmentDate, a.appointmentDate))
 
   const statusBadge = (status) => {
     const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.Pending
@@ -171,7 +174,7 @@ export default function AppointmentsList() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  {['Cliente', 'Servicio', 'Fecha', 'Hora', 'Estado', 'Notas', 'Acciones'].map((h) => (
+                  {['Cliente', 'Servicio', 'Empleado', 'Fecha', 'Hora', 'Estado', 'Notas', 'Acciones'].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -181,6 +184,16 @@ export default function AppointmentsList() {
                   <tr key={a.id} className="hover:bg-gray-50 transition-colors group">
                     <td className="px-4 py-3 font-medium text-gray-900">{a.customerName}</td>
                     <td className="px-4 py-3 text-gray-500 max-w-[140px] truncate">{getServiceName(a.serviceId)}</td>
+                    <td className="px-4 py-3">
+                      {a.employeeName ? (
+                        <span className="flex items-center gap-1.5 text-gray-700">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: a.employeeColor ?? '#6366f1' }} />
+                          <span className="text-sm">{a.employeeName}</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(a.appointmentDate)}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatTime(a.appointmentDate)} — {formatTime(a.endTime)}</td>
                     <td className="px-4 py-3">{statusBadge(a.status)}</td>

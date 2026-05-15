@@ -5,45 +5,38 @@ using AppointmentScheduler.Domain.Entities;
 
 namespace AppointmentScheduler.Application.Services;
 
+// Legacy controller still routes through here. Delegates to EmployeeManagementService
+// for the actual logic; this class kept only so WorkingHoursController compiles.
 public class WorkingHoursService
 {
     private readonly IWorkingHoursRepository _workingHoursRepository;
-    private readonly IBusinessRepository _businessRepository;
 
-    public WorkingHoursService(IWorkingHoursRepository workingHoursRepository, IBusinessRepository businessRepository)
+    public WorkingHoursService(IWorkingHoursRepository workingHoursRepository)
     {
         _workingHoursRepository = workingHoursRepository;
-        _businessRepository = businessRepository;
     }
 
-    public async Task<List<WorkingHoursResponse>> GetByBusinessIdAsync(Guid businessId)
+    public async Task<List<WorkingHoursResponse>> GetByEmployeeIdAsync(Guid employeeId)
     {
-        var hours = await _workingHoursRepository.GetByBusinessIdAsync(businessId);
+        var hours = await _workingHoursRepository.GetByEmployeeIdAsync(employeeId);
         return hours.Select(ToResponse).ToList();
     }
 
     public async Task<WorkingHoursResponse> CreateAsync(CreateWorkingHoursRequest request)
     {
-        _ = await _businessRepository.GetByIdAsync(request.BusinessId)
-            ?? throw new NotFoundException($"Business with id '{request.BusinessId}' not found.");
-
         if (request.DayOfWeek < 0 || request.DayOfWeek > 6)
             throw new ConflictException("DayOfWeek must be between 0 (Sunday) and 6 (Saturday).");
 
         if (request.StartTime >= request.EndTime)
             throw new ConflictException("StartTime must be before EndTime.");
 
-        var existing = await _workingHoursRepository.GetByBusinessIdAndDayAsync(request.BusinessId, request.DayOfWeek);
-        if (existing.Count > 0)
-            throw new ConflictException($"Working hours already defined for day {request.DayOfWeek}.");
-
         var workingHours = new WorkingHours
         {
             Id = Guid.NewGuid(),
-            BusinessId = request.BusinessId,
+            EmployeeId = request.EmployeeId,
             DayOfWeek = request.DayOfWeek,
             StartTime = request.StartTime,
-            EndTime = request.EndTime
+            EndTime = request.EndTime,
         };
 
         await _workingHoursRepository.AddAsync(workingHours);
@@ -64,7 +57,6 @@ public class WorkingHoursService
         wh.EndTime = request.EndTime;
 
         await _workingHoursRepository.SaveChangesAsync();
-
         return ToResponse(wh);
     }
 
@@ -78,5 +70,5 @@ public class WorkingHoursService
     }
 
     private static WorkingHoursResponse ToResponse(WorkingHours wh) =>
-        new(wh.Id, wh.BusinessId, wh.DayOfWeek, wh.StartTime, wh.EndTime);
+        new(wh.Id, wh.EmployeeId, wh.DayOfWeek, wh.StartTime, wh.EndTime);
 }

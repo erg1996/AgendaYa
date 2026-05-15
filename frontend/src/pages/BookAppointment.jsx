@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useBusiness } from '../components/BusinessContext'
 import { getAvailability, createAppointment } from '../api/client'
+import { formatWallTime, wallClockHour, todayDateKey } from '../api/dateTime'
 import { Link } from 'react-router-dom'
 import { CalendarIcon, ClockIcon, SettingsIcon, CheckCircleIcon } from '../components/Icons'
 
@@ -53,8 +54,20 @@ export default function BookAppointment() {
     setSlots([])
     try {
       const data = await getAvailability(business.id, date, serviceId)
-      setSlots(data)
-      if (data.length === 0) setSlotsError('No hay horarios disponibles para esta fecha')
+      const today = todayDateKey()
+      let filtered
+      if (date > today) {
+        filtered = data
+      } else {
+        const now = new Date()
+        const nowHm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+        filtered = data.filter(s => {
+          const m = String(s.startTime).match(/T(\d{2}:\d{2})/)
+          return m ? m[1] > nowHm : true
+        })
+      }
+      setSlots(filtered)
+      if (filtered.length === 0) setSlotsError('No hay horarios disponibles para esta fecha')
     } catch (err) {
       setSlotsError(err.message)
     } finally {
@@ -90,12 +103,11 @@ export default function BookAppointment() {
     }
   }
 
-  const formatTime = (iso) =>
-    new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  const formatTime = formatWallTime
 
-  const today = new Date().toISOString().split('T')[0]
-  const morningSlots = slots.filter((s) => new Date(s.startTime).getHours() < 12)
-  const afternoonSlots = slots.filter((s) => new Date(s.startTime).getHours() >= 12)
+  const today = todayDateKey()
+  const morningSlots = slots.filter((s) => wallClockHour(s.startTime) < 12)
+  const afternoonSlots = slots.filter((s) => wallClockHour(s.startTime) >= 12)
 
   return (
     <div className="space-y-5 max-w-2xl">

@@ -2,6 +2,7 @@ import { useBusiness } from '../components/BusinessContext'
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { getDashboardAnalytics } from '../api/client'
+import { formatWallDateTime, wallClockDateKey, todayDateKey, compareWallClock } from '../api/dateTime'
 import {
   StoreIcon,
   ClockIcon,
@@ -60,11 +61,11 @@ export default function Dashboard() {
     )
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayDateKey()
   const active = appointments.filter((a) => a.status === 'Pending' || a.status === 'Confirmed')
   const completed = appointments.filter((a) => a.status === 'Completed')
   const cancelled = appointments.filter((a) => a.status === 'Cancelled')
-  const todayActive = active.filter((a) => a.appointmentDate.split('T')[0] === today)
+  const todayActive = active.filter((a) => wallClockDateKey(a.appointmentDate) === today)
 
   const revenueValue = analytics?.monthRevenue != null
     ? `$${Number(analytics.monthRevenue).toLocaleString('es', { minimumFractionDigits: 0 })}`
@@ -89,14 +90,18 @@ export default function Dashboard() {
     return `${h}:00 ${hour < 12 ? 'AM' : 'PM'}`
   }
 
-  const formatDateTime = (iso) => {
-    const d = new Date(iso)
-    return d.toLocaleDateString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-  }
+  const formatDateTime = formatWallDateTime
 
+  // "now" expressed as a wall-clock string (yyyy-MM-ddTHH:mm) so the comparison
+  // works against the API's wall-clock values without going through Date.
+  const nowKey = (() => {
+    const d = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
+  })()
   const upcoming = active
-    .filter((a) => new Date(a.appointmentDate) >= new Date())
-    .sort((a, b) => new Date(a.appointmentDate) - new Date(b.appointmentDate))
+    .filter((a) => compareWallClock(a.appointmentDate, nowKey) >= 0)
+    .sort((a, b) => compareWallClock(a.appointmentDate, b.appointmentDate))
     .slice(0, 5)
 
   return (

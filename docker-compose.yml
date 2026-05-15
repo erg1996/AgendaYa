@@ -13,11 +13,37 @@ services:
       ConnectionStrings__DefaultConnection: ${DATABASE_URL:?DATABASE_URL is required}
       Cors__AllowedOrigins__0: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}
       PublicUrl__AppBaseUrl: ${PUBLIC_URL:?PUBLIC_URL is required}
+      Features__WhatsAppAutomation: ${FEATURE_WHATSAPP_AUTOMATION:-false}
+      WhatsApp__ServiceUrl: http://whatsapp:3001
+      WhatsApp__InternalSecret: ${WHATSAPP_INTERNAL_SECRET:?WHATSAPP_INTERNAL_SECRET is required}
     volumes:
       - agendaya-uploads:/app/wwwroot/uploads
       - agendaya-logs:/app/logs
+    depends_on:
+      whatsapp:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  whatsapp:
+    build: ./whatsapp-service
+    image: agendaya-whatsapp:latest
+    container_name: agendaya-whatsapp
+    restart: unless-stopped
+    # No ports — internal network only
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      INTERNAL_SECRET: ${WHATSAPP_INTERNAL_SECRET:?WHATSAPP_INTERNAL_SECRET is required}
+      DOTNET_WEBHOOK_URL: http://api:8080/api/internal/whatsapp/webhook
+      SESSIONS_DIR: /app/data
+    volumes:
+      - whatsapp-sessions:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -25,3 +51,4 @@ services:
 volumes:
   agendaya-uploads:
   agendaya-logs:
+  whatsapp-sessions:

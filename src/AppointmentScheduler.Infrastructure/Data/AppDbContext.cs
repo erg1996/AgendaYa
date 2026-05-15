@@ -1,10 +1,25 @@
 using AppointmentScheduler.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AppointmentScheduler.Infrastructure.Data;
 
 public class AppDbContext : DbContext
 {
+    // Npgsql 8 removed the legacy timestamp AppContext switch and now always
+    // returns DateTimeKind.Utc from timestamptz columns. This converter makes
+    // EF Core transparently treat all DateTime values as UTC when reading/writing,
+    // so: (1) writes of Kind.Unspecified succeed, (2) LINQ query parameters are
+    // sent as UTC, and (3) reads return Unspecified — combined with
+    // NaiveDateTimeConverter the API never emits a Z suffix.
+    private static readonly ValueConverter<DateTime, DateTime> _utcConverter = new(
+        v => v.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v, DateTimeKind.Utc),
+        v => DateTime.SpecifyKind(v, DateTimeKind.Unspecified));
+
+    private static readonly ValueConverter<DateTime?, DateTime?> _utcConverterNullable = new(
+        v => v == null ? null : v.Value.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc),
+        v => v == null ? null : DateTime.SpecifyKind(v.Value, DateTimeKind.Unspecified));
+
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     public DbSet<Business> Businesses => Set<Business>();
@@ -14,7 +29,12 @@ public class AppDbContext : DbContext
     public DbSet<BlockedDate> BlockedDates => Set<BlockedDate>();
     public DbSet<User> Users => Set<User>();
     public DbSet<UserBusiness> UserBusinesses => Set<UserBusiness>();
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeeServiceLink> EmployeeServiceLinks => Set<EmployeeServiceLink>();
     public DbSet<WhatsAppMessageTemplate> WhatsAppMessageTemplates => Set<WhatsAppMessageTemplate>();
+    public DbSet<WhatsAppSession> WhatsAppSessions => Set<WhatsAppSession>();
+    public DbSet<WhatsAppBlacklist> WhatsAppBlacklists => Set<WhatsAppBlacklist>();
+    public DbSet<WhatsAppLog> WhatsAppLogs => Set<WhatsAppLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +46,9 @@ public class AppDbContext : DbContext
             entity.Property(e => e.LogoUrl).HasMaxLength(500);
             entity.Property(e => e.BrandColor).HasMaxLength(20);
             entity.Property(e => e.WhatsAppReminderTemplate).HasMaxLength(2000);
+            entity.Property(e => e.OwnerNotifyEmail).HasDefaultValue(true);
+            entity.Property(e => e.OwnerNotifyWhatsApp).HasDefaultValue(false);
+            entity.Property(e => e.OwnerNotifyPhone).HasMaxLength(30);
             entity.Property(e => e.Address).HasMaxLength(500);
             entity.HasIndex(e => e.Slug).IsUnique();
         });
@@ -44,6 +67,34 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<Employee>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Color).IsRequired().HasMaxLength(20).HasDefaultValue("#6366f1");
+            entity.Property(e => e.AvatarUrl).HasMaxLength(500);
+            entity.Property(e => e.CommissionPercent).HasColumnType("decimal(5,2)").HasDefaultValue(100m);
+            entity.HasIndex(e => e.BusinessId);
+            entity.HasOne(e => e.Business)
+                .WithMany(b => b.Employees)
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmployeeServiceLink>(entity =>
+        {
+            entity.HasKey(e => new { e.EmployeeId, e.ServiceId });
+            entity.Property(e => e.OverridePrice).HasColumnType("decimal(10,2)");
+            entity.HasOne(e => e.Employee)
+                .WithMany(emp => emp.EmployeeServices)
+                .HasForeignKey(e => e.EmployeeId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<Appointment>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -54,8 +105,11 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Notes).HasMaxLength(1000);
             entity.Property(e => e.ReminderSent).HasDefaultValue(false);
             entity.Property(e => e.WhatsAppReminderSent).HasDefaultValue(false);
+            entity.Property(e => e.WhatsAppReminderFailed).HasDefaultValue(false);
+            entity.Property(e => e.WhatsAppOptIn).HasDefaultValue(false);
             entity.Ignore(e => e.EndTime);
             entity.HasIndex(e => new { e.BusinessId, e.AppointmentDate });
+            entity.HasIndex(e => new { e.EmployeeId, e.AppointmentDate });
             entity.HasIndex(e => e.ServiceId);
             entity.HasOne(e => e.Business)
                 .WithMany(b => b.Appointments)
@@ -65,15 +119,20 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ServiceId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Employee)
+                .WithMany(emp => emp.Appointments)
+                .HasForeignKey(e => e.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<WorkingHours>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => new { e.BusinessId, e.DayOfWeek }).IsUnique();
-            entity.HasOne(e => e.Business)
-                .WithMany(b => b.WorkingHours)
-                .HasForeignKey(e => e.BusinessId)
+            // Multiple rows per employee per day are allowed (split shifts).
+            entity.HasIndex(e => new { e.EmployeeId, e.DayOfWeek });
+            entity.HasOne(e => e.Employee)
+                .WithMany(emp => emp.WorkingHours)
+                .HasForeignKey(e => e.EmployeeId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -126,5 +185,59 @@ public class AppDbContext : DbContext
                 .HasForeignKey(e => e.BusinessId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        modelBuilder.Entity<WhatsAppBlacklist>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.NormalizedPhone).IsRequired().HasMaxLength(30);
+            entity.HasIndex(e => new { e.BusinessId, e.NormalizedPhone }).IsUnique();
+            entity.HasOne(e => e.Business)
+                .WithMany()
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WhatsAppLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SenderPhone).HasMaxLength(30);
+            entity.Property(e => e.RecipientPhone).IsRequired().HasMaxLength(30);
+            entity.Property(e => e.RecipientName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.MessageType).HasConversion<int>();
+            entity.Property(e => e.ErrorReason).HasMaxLength(500);
+            entity.HasIndex(e => new { e.BusinessId, e.SentAt });
+            entity.HasOne(e => e.Business)
+                .WithMany()
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WhatsAppSession>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).HasConversion<int>().HasDefaultValue(WhatsAppSessionStatus.Disconnected);
+            entity.Property(e => e.PhoneNumber).HasMaxLength(30);
+            entity.Property(e => e.LastError).HasMaxLength(500);
+            entity.Property(e => e.AutoRemindersEnabled).HasDefaultValue(false);
+            entity.Property(e => e.TimeZoneId).HasMaxLength(100);
+            entity.HasIndex(e => e.BusinessId).IsUnique();
+            entity.HasOne(e => e.Business)
+                .WithMany()
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Apply UTC converter to every DateTime/DateTime? property so Npgsql 8
+        // accepts all writes and EF Core sends UTC parameters in LINQ queries.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTime))
+                    property.SetValueConverter(_utcConverter);
+                else if (property.ClrType == typeof(DateTime?))
+                    property.SetValueConverter(_utcConverterNullable);
+            }
+        }
     }
 }

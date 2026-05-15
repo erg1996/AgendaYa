@@ -68,6 +68,9 @@ export const getBusiness = (id) => authRequest(`/api/business/${id}`)
 
 export const getBusinessBySlug = (slug) => publicRequest(`/api/business/slug/${slug}`)
 
+export const getBusinessWhatsAppActive = (slug) =>
+  publicRequest(`/api/business/slug/${slug}/whatsapp-active`).catch(() => ({ active: false }))
+
 export const createBusiness = (data) =>
   authRequest('/api/business', { method: 'POST', body: JSON.stringify(data) })
 
@@ -116,11 +119,42 @@ export const createBlockedDate = (data) =>
 export const deleteBlockedDate = (id, businessId) =>
   authRequest(`/api/blocked-dates/${id}?businessId=${businessId}`, { method: 'DELETE' })
 
+// ─── Employees ───────────────────────────────────────────────────────────────
+export const getEmployees = (businessId, includeInactive = false) =>
+  authRequest(`/api/employees?businessId=${businessId}&includeInactive=${includeInactive}`)
+
+export const createEmployee = (data) =>
+  authRequest('/api/employees', { method: 'POST', body: JSON.stringify(data) })
+
+export const updateEmployee = (id, businessId, data) =>
+  authRequest(`/api/employees/${id}?businessId=${businessId}`, { method: 'PUT', body: JSON.stringify(data) })
+
+export const getEmployeeWorkingHours = (employeeId, businessId) =>
+  authRequest(`/api/employees/${employeeId}/working-hours?businessId=${businessId}`)
+
+export const addEmployeeWorkingHours = (employeeId, businessId, data) =>
+  authRequest(`/api/employees/${employeeId}/working-hours?businessId=${businessId}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const updateEmployeeWorkingHours = (employeeId, whId, businessId, data) =>
+  authRequest(`/api/employees/${employeeId}/working-hours/${whId}?businessId=${businessId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+
+export const deleteEmployeeWorkingHours = (employeeId, whId, businessId) =>
+  authRequest(`/api/employees/${employeeId}/working-hours/${whId}?businessId=${businessId}`, {
+    method: 'DELETE',
+  })
+
 // ─── Availability (public) ────────────────────────────────────────────────────
-export const getAvailability = (businessId, date, serviceId) =>
-  publicRequest(
-    `/api/availability?businessId=${businessId}&date=${encodeURIComponent(date)}&serviceId=${serviceId}`
-  )
+export const getAvailability = (businessId, date, serviceId, employeeId = null) => {
+  const params = new URLSearchParams({ businessId, date, serviceId })
+  if (employeeId) params.set('employeeId', employeeId)
+  return publicRequest(`/api/availability?${params}`)
+}
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const register = (data) =>
@@ -186,13 +220,84 @@ export const downloadReportCsv = async (businessId, from, to) => {
   URL.revokeObjectURL(url)
 }
 
+// ─── WhatsApp Log ─────────────────────────────────────────────────────────────
+export const getWhatsAppLog = (businessId, page = 1, pageSize = 50, type = null) => {
+  const params = new URLSearchParams({ businessId, page, pageSize })
+  if (type) params.set('type', type)
+  return authRequest(`/api/whatsapp-log?${params}`)
+}
+
 // ─── Admin (super admin only) ─────────────────────────────────────────────────
 export const getAdminOverview = () => authRequest('/api/admin/overview')
 export const getAdminBusinesses = () => authRequest('/api/admin/businesses')
 export const getAdminBusinessDetail = (id) => authRequest(`/api/admin/businesses/${id}`)
 export const getAdminActivity = (limit = 50) => authRequest(`/api/admin/activity?limit=${limit}`)
 
+// ─── WhatsApp Session (Phase 2 auto-reminders) ───────────────────────────────
+export const pingWhatsAppService = async () => {
+  // Returns null if feature flag is off (404), true/false depending on node reachability
+  const token = getToken()
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(`${BASE_URL}/api/whatsapp-session/ping`, { headers })
+  if (res.status === 404) return null
+  if (!res.ok) return { serviceReachable: false }
+  return res.json()
+}
+
+export const getWhatsAppSession = () => authRequest('/api/whatsapp-session')
+
+export const startWhatsAppSession = () =>
+  authRequest('/api/whatsapp-session/start', { method: 'POST' })
+
+export const disconnectWhatsAppSession = () =>
+  authRequest('/api/whatsapp-session', { method: 'DELETE' })
+
+export const updateWhatsAppSessionSettings = (autoRemindersEnabled, timeZoneId) =>
+  authRequest('/api/whatsapp-session', {
+    method: 'PATCH',
+    body: JSON.stringify({ autoRemindersEnabled, timeZoneId: timeZoneId ?? null }),
+  })
+
+export const sendWhatsAppTestMessage = (to, body) =>
+  authRequest('/api/whatsapp-session/test', {
+    method: 'POST',
+    body: JSON.stringify({ to, body }),
+  })
+
+export const getWhatsAppQrBlobUrl = async () => {
+  const token = getToken()
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(`${BASE_URL}/api/whatsapp-session/qr`, { headers, cache: 'no-store' })
+  if (!res.ok) return null
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
+
 // ─── Upload ───────────────────────────────────────────────────────────────────
+export const uploadEmployeeAvatar = async (file) => {
+  const token = getToken()
+  const csrfToken = getCsrfToken()
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  if (csrfToken) headers['X-CSRF-Token'] = csrfToken
+
+  const res = await fetch(`${BASE_URL}/api/upload/avatar`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error ?? `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 export const uploadLogo = async (file) => {
   const token = getToken()
   const csrfToken = getCsrfToken()
