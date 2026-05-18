@@ -17,7 +17,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r app && useradd -r -g app app \
+    && groupadd -r app || true \
+    && useradd -r -g app app || true \
     && mkdir -p /app/data /app/wwwroot/uploads /app/logs \
     && chown -R app:app /app
 
